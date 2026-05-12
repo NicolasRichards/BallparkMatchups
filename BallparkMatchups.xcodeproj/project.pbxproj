@@ -1,0 +1,484 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0BCECAF180E4EEA0F2FFB0A1 /* FinalCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FFB9AA8425FBDCAE05F7B72 /* FinalCardView.swift */; };
+		0C45D87A74E18D8750D08A18 /* MLBAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00DFE70B1439B1A3A590B251 /* MLBAPIClient.swift */; };
+		0C4845C738403D0E8DB31FC3 /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CFAF46739A442F0EB881A60 /* AppModels.swift */; };
+		18FFED1862AC0C23BDAF8B3F /* DelayCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FA7C08F694E8137F3D85FAF /* DelayCardView.swift */; };
+		1F2E15F8A8DB614BD29B7063 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC860889E8C664C30CB0D8B5 /* APIModels.swift */; };
+		2108B34F2E428D16159C0DE3 /* GameViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 538D582903744160CFA39669 /* GameViewModel.swift */; };
+		24EB1689EC5ECC9490C295EA /* DebugOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9341DB049A6C096F011DCEC /* DebugOverlayView.swift */; };
+		296EED6BAE71146387CE96F4 /* venues.json in Resources */ = {isa = PBXBuildFile; fileRef = A309E1F6EAD7875F2741283A /* venues.json */; };
+		30871166680E52097765E99E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E9A1EFDECF13DB0678CCC4DC /* Assets.xcassets */; };
+		3A4EDD2C239B50190B3B6CA9 /* LiveCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13E01E68B333925ACF6809D0 /* LiveCardView.swift */; };
+		46BBBEE0417CEE9CE102A0E2 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A099E74EC0E0C3FABA0DB7 /* Theme.swift */; };
+		6013BAE55E63D6AE5C9CC8DE /* situationCodes.json in Resources */ = {isa = PBXBuildFile; fileRef = 29020FDD098F1F0367B3E85C /* situationCodes.json */; };
+		603436FF9BE8B8358BFDAA30 /* BrowseGamesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44E860E9ADFE9A6A7B2A5CC4 /* BrowseGamesView.swift */; };
+		66CC429DFA2626F46CCF26E7 /* BallparkMatchupsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A429327997A06EB4A2A06D6E /* BallparkMatchupsApp.swift */; };
+		7DB3BFAE638DA12ECCC83F47 /* BvPCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B05C93F8EB532BA8C18CD39B /* BvPCardView.swift */; };
+		7F3AA5F79FD8F8947D9747CA /* EntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 936025567785D0ACA3223E21 /* EntryView.swift */; };
+		87E2E70C220669059CDDA570 /* SplitPriorityEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E5BA283A1C3282FFD2B2726 /* SplitPriorityEngine.swift */; };
+		907D9CA0AC413036389BBCED /* SplitCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAD70182D49A4FD3C1B11D1B /* SplitCardView.swift */; };
+		93EEC9A31B42BD19F14674B0 /* GameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C67CE15DF5E70D8210D7BDFB /* GameView.swift */; };
+		A38BB5FD8732CAFAC739A9EB /* VenueCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D825AA6F7074C57A24D4DED /* VenueCache.swift */; };
+		B4C2947C3E084ED0361089C4 /* MatchupBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0E337A19076EBE584169B97 /* MatchupBlockView.swift */; };
+		B4D9265F79FA38F6F5896A2A /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EED8A2ED0BAE0359DC140A /* ContentView.swift */; };
+		DB096154576180248D6F58B9 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE6166EF2C389279BBD6B784 /* LocationService.swift */; };
+		DC2D0BDA10A45315386D303D /* BetweenInningsCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25239F55E1F277C64B9358E3 /* BetweenInningsCardView.swift */; };
+		E22BE0BB610850D914CE2577 /* PreGameCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6705D45D9EE48F7B4366CF11 /* PreGameCardView.swift */; };
+		EFEB8A04CBB20C30C955543B /* SituationStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249A74974D930EA82A24816A /* SituationStripView.swift */; };
+		F305BBB8040D1947D7146009 /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F2D2863246BD2FCA343F1F9 /* AppViewModel.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		00DFE70B1439B1A3A590B251 /* MLBAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLBAPIClient.swift; sourceTree = "<group>"; };
+		0CFAF46739A442F0EB881A60 /* AppModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
+		13E01E68B333925ACF6809D0 /* LiveCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCardView.swift; sourceTree = "<group>"; };
+		249A74974D930EA82A24816A /* SituationStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SituationStripView.swift; sourceTree = "<group>"; };
+		25239F55E1F277C64B9358E3 /* BetweenInningsCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BetweenInningsCardView.swift; sourceTree = "<group>"; };
+		29020FDD098F1F0367B3E85C /* situationCodes.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = situationCodes.json; sourceTree = "<group>"; };
+		2FFB9AA8425FBDCAE05F7B72 /* FinalCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinalCardView.swift; sourceTree = "<group>"; };
+		44E860E9ADFE9A6A7B2A5CC4 /* BrowseGamesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseGamesView.swift; sourceTree = "<group>"; };
+		4D815DD2BB41FEA1DA45DC65 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		4E5BA283A1C3282FFD2B2726 /* SplitPriorityEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitPriorityEngine.swift; sourceTree = "<group>"; };
+		4FA7C08F694E8137F3D85FAF /* DelayCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DelayCardView.swift; sourceTree = "<group>"; };
+		538D582903744160CFA39669 /* GameViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameViewModel.swift; sourceTree = "<group>"; };
+		5D825AA6F7074C57A24D4DED /* VenueCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VenueCache.swift; sourceTree = "<group>"; };
+		6705D45D9EE48F7B4366CF11 /* PreGameCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreGameCardView.swift; sourceTree = "<group>"; };
+		7BCCADA3021C07D12E775CB5 /* BallparkMatchups.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BallparkMatchups.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7F2D2863246BD2FCA343F1F9 /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
+		936025567785D0ACA3223E21 /* EntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryView.swift; sourceTree = "<group>"; };
+		A309E1F6EAD7875F2741283A /* venues.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = venues.json; sourceTree = "<group>"; };
+		A429327997A06EB4A2A06D6E /* BallparkMatchupsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BallparkMatchupsApp.swift; sourceTree = "<group>"; };
+		B05C93F8EB532BA8C18CD39B /* BvPCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BvPCardView.swift; sourceTree = "<group>"; };
+		B5EED8A2ED0BAE0359DC140A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		BAD70182D49A4FD3C1B11D1B /* SplitCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitCardView.swift; sourceTree = "<group>"; };
+		BC860889E8C664C30CB0D8B5 /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
+		BE6166EF2C389279BBD6B784 /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
+		C67CE15DF5E70D8210D7BDFB /* GameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameView.swift; sourceTree = "<group>"; };
+		D0E337A19076EBE584169B97 /* MatchupBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchupBlockView.swift; sourceTree = "<group>"; };
+		E9A1EFDECF13DB0678CCC4DC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F1A099E74EC0E0C3FABA0DB7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		F9341DB049A6C096F011DCEC /* DebugOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugOverlayView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		29B2D46AA747A59804D46E1F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0C66F5B1B3B07871FA487FB4 /* API */ = {
+			isa = PBXGroup;
+			children = (
+				BC860889E8C664C30CB0D8B5 /* APIModels.swift */,
+				00DFE70B1439B1A3A590B251 /* MLBAPIClient.swift */,
+			);
+			path = API;
+			sourceTree = "<group>";
+		};
+		5928955287B8089ED2177128 = {
+			isa = PBXGroup;
+			children = (
+				FB57B33613A37F5F2CFEB5E8 /* BallparkMatchups */,
+				AE59D88C5460D2413CB142C1 /* Resources */,
+				BF7A2D27A78D590BDEF15AF2 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		60F259A96BD0B6FAD1225D7D /* Cards */ = {
+			isa = PBXGroup;
+			children = (
+				6705D45D9EE48F7B4366CF11 /* PreGameCardView.swift */,
+				13E01E68B333925ACF6809D0 /* LiveCardView.swift */,
+				25239F55E1F277C64B9358E3 /* BetweenInningsCardView.swift */,
+				4FA7C08F694E8137F3D85FAF /* DelayCardView.swift */,
+				2FFB9AA8425FBDCAE05F7B72 /* FinalCardView.swift */,
+			);
+			path = Cards;
+			sourceTree = "<group>";
+		};
+		9C035E7454E6255EF4EA445C /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				5D825AA6F7074C57A24D4DED /* VenueCache.swift */,
+				BE6166EF2C389279BBD6B784 /* LocationService.swift */,
+				4E5BA283A1C3282FFD2B2726 /* SplitPriorityEngine.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		9F58BDF7D4F04F6C4DC3CB6C /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				F1A099E74EC0E0C3FABA0DB7 /* Theme.swift */,
+				B5EED8A2ED0BAE0359DC140A /* ContentView.swift */,
+				C67CE15DF5E70D8210D7BDFB /* GameView.swift */,
+				E4962E656D2455637B558076 /* Entry */,
+				60F259A96BD0B6FAD1225D7D /* Cards */,
+				F8A961A65445D96B693D0256 /* Components */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		AE59D88C5460D2413CB142C1 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A309E1F6EAD7875F2741283A /* venues.json */,
+				29020FDD098F1F0367B3E85C /* situationCodes.json */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		BF7A2D27A78D590BDEF15AF2 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				7BCCADA3021C07D12E775CB5 /* BallparkMatchups.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C9E04F99D8E7C9D4D391AEF8 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				0CFAF46739A442F0EB881A60 /* AppModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		E4962E656D2455637B558076 /* Entry */ = {
+			isa = PBXGroup;
+			children = (
+				936025567785D0ACA3223E21 /* EntryView.swift */,
+				44E860E9ADFE9A6A7B2A5CC4 /* BrowseGamesView.swift */,
+			);
+			path = Entry;
+			sourceTree = "<group>";
+		};
+		EE1E649591DBDF61DE2E4396 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				7F2D2863246BD2FCA343F1F9 /* AppViewModel.swift */,
+				538D582903744160CFA39669 /* GameViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		F8A961A65445D96B693D0256 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				D0E337A19076EBE584169B97 /* MatchupBlockView.swift */,
+				249A74974D930EA82A24816A /* SituationStripView.swift */,
+				B05C93F8EB532BA8C18CD39B /* BvPCardView.swift */,
+				BAD70182D49A4FD3C1B11D1B /* SplitCardView.swift */,
+				F9341DB049A6C096F011DCEC /* DebugOverlayView.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		FB57B33613A37F5F2CFEB5E8 /* BallparkMatchups */ = {
+			isa = PBXGroup;
+			children = (
+				4D815DD2BB41FEA1DA45DC65 /* Info.plist */,
+				A429327997A06EB4A2A06D6E /* BallparkMatchupsApp.swift */,
+				E9A1EFDECF13DB0678CCC4DC /* Assets.xcassets */,
+				C9E04F99D8E7C9D4D391AEF8 /* Models */,
+				0C66F5B1B3B07871FA487FB4 /* API */,
+				9C035E7454E6255EF4EA445C /* Services */,
+				EE1E649591DBDF61DE2E4396 /* ViewModels */,
+				9F58BDF7D4F04F6C4DC3CB6C /* Views */,
+			);
+			path = BallparkMatchups;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		42AEFBAE01D2DFD981F7DA7D /* BallparkMatchups */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F707ED8CFBC457F7F618ECA6 /* Build configuration list for PBXNativeTarget "BallparkMatchups" */;
+			buildPhases = (
+				E7209FB05162B7572F88D05E /* Sources */,
+				29B2D46AA747A59804D46E1F /* Frameworks */,
+				66F8606E9F0A136E2228EBCB /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BallparkMatchups;
+			productName = BallparkMatchups;
+			productReference = 7BCCADA3021C07D12E775CB5 /* BallparkMatchups.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		46F86FAA6BBF9AC94A7E4595 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1530;
+				LastUpgradeCheck = 2650;
+				TargetAttributes = {
+					42AEFBAE01D2DFD981F7DA7D = {
+						CreatedOnToolsVersion = 15.3;
+					};
+				};
+			};
+			buildConfigurationList = 9D908D8792E5642B2623649E /* Build configuration list for PBXProject "BallparkMatchups" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 5928955287B8089ED2177128;
+			productRefGroup = BF7A2D27A78D590BDEF15AF2 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				42AEFBAE01D2DFD981F7DA7D /* BallparkMatchups */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		66F8606E9F0A136E2228EBCB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				30871166680E52097765E99E /* Assets.xcassets in Resources */,
+				296EED6BAE71146387CE96F4 /* venues.json in Resources */,
+				6013BAE55E63D6AE5C9CC8DE /* situationCodes.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E7209FB05162B7572F88D05E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				66CC429DFA2626F46CCF26E7 /* BallparkMatchupsApp.swift in Sources */,
+				0C4845C738403D0E8DB31FC3 /* AppModels.swift in Sources */,
+				1F2E15F8A8DB614BD29B7063 /* APIModels.swift in Sources */,
+				0C45D87A74E18D8750D08A18 /* MLBAPIClient.swift in Sources */,
+				A38BB5FD8732CAFAC739A9EB /* VenueCache.swift in Sources */,
+				DB096154576180248D6F58B9 /* LocationService.swift in Sources */,
+				87E2E70C220669059CDDA570 /* SplitPriorityEngine.swift in Sources */,
+				F305BBB8040D1947D7146009 /* AppViewModel.swift in Sources */,
+				2108B34F2E428D16159C0DE3 /* GameViewModel.swift in Sources */,
+				46BBBEE0417CEE9CE102A0E2 /* Theme.swift in Sources */,
+				B4D9265F79FA38F6F5896A2A /* ContentView.swift in Sources */,
+				93EEC9A31B42BD19F14674B0 /* GameView.swift in Sources */,
+				7F3AA5F79FD8F8947D9747CA /* EntryView.swift in Sources */,
+				603436FF9BE8B8358BFDAA30 /* BrowseGamesView.swift in Sources */,
+				E22BE0BB610850D914CE2577 /* PreGameCardView.swift in Sources */,
+				3A4EDD2C239B50190B3B6CA9 /* LiveCardView.swift in Sources */,
+				DC2D0BDA10A45315386D303D /* BetweenInningsCardView.swift in Sources */,
+				18FFED1862AC0C23BDAF8B3F /* DelayCardView.swift in Sources */,
+				0BCECAF180E4EEA0F2FFB0A1 /* FinalCardView.swift in Sources */,
+				B4C2947C3E084ED0361089C4 /* MatchupBlockView.swift in Sources */,
+				EFEB8A04CBB20C30C955543B /* SituationStripView.swift in Sources */,
+				7DB3BFAE638DA12ECCC83F47 /* BvPCardView.swift in Sources */,
+				907D9CA0AC413036389BBCED /* SplitCardView.swift in Sources */,
+				24EB1689EC5ECC9490C295EA /* DebugOverlayView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		17234DA728CB8FFFA593E13A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = BallparkMatchups/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nick.BallparkMatchups;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		189D56DE85F89520581145D8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_CYCLE = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_EXCEPTION = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 8VKMPP3AW2;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		30547E9EC5F49CB55604B54F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_CYCLE = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_EXCEPTION = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 8VKMPP3AW2;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		339F2120A275E8028CC42767 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = BallparkMatchups/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nick.BallparkMatchups;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		9D908D8792E5642B2623649E /* Build configuration list for PBXProject "BallparkMatchups" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				189D56DE85F89520581145D8 /* Debug */,
+				30547E9EC5F49CB55604B54F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F707ED8CFBC457F7F618ECA6 /* Build configuration list for PBXNativeTarget "BallparkMatchups" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				339F2120A275E8028CC42767 /* Debug */,
+				17234DA728CB8FFFA593E13A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 46F86FAA6BBF9AC94A7E4595 /* Project object */;
+}
