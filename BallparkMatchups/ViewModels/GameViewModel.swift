@@ -543,7 +543,9 @@ final class GameViewModel: ObservableObject {
             careerSplitCache[CacheKey(playerId: playerId, sitCode: code, isCareer: true)]?.first
         }
         if !existing.isEmpty { return existing }
-        return await fetchSplits(playerId: playerId, codes: codes, season: nil, isCareer: true)
+        // MLB's statSplits endpoint defaults to current season without a season param;
+        // pass the current year explicitly so the label matches the data.
+        return await fetchSplits(playerId: playerId, codes: codes, season: currentSeason(), isCareer: true)
     }
 
     private func fetchSplits(playerId: Int, codes: [String], season: Int?, isCareer: Bool) async -> [SplitLine] {
@@ -564,7 +566,9 @@ final class GameViewModel: ObservableObject {
     }
 
     private func cachedSplits(for playerId: Int, isCareer: Bool) -> [SplitLine] {
-        careerSplitCache.values.flatMap { $0 }.filter { _ in isCareer }
+        careerSplitCache.keys
+            .filter { $0.playerId == playerId && $0.isCareer == isCareer }
+            .compactMap { careerSplitCache[$0]?.first }
     }
 
     private func buildSplitCards(
@@ -597,7 +601,11 @@ final class GameViewModel: ObservableObject {
             isFirstBatter: isFirstBatter,
             careerOPS: nil
         ) {
-            result.append(pitcherCard)
+            // Don't show a pitcher split with the same sitCode as a batter split already shown —
+            // it would display as an identical label (e.g. "VS LEFT" twice).
+            if !result.contains(where: { $0.sitCode == pitcherCard.sitCode }) {
+                result.append(pitcherCard)
+            }
         }
 
         return (result, batterSplits.count + pitcherSplits.count)
