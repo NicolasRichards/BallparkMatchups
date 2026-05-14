@@ -3,6 +3,8 @@ import SwiftUI
 struct MatchupBlockView: View {
     let batter: PlayerInfo
     let pitcher: PlayerInfo
+    let batterGame: BatterGameLine?
+    let pitcherGame: PitcherGameLine?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -18,9 +20,15 @@ struct MatchupBlockView: View {
     private enum Role { case batter, pitcher }
 
     private func playerBlock(player: PlayerInfo, role: Role) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            // Name + position + handedness
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
+            // Role label
+            Text(role == .batter ? "BATTER" : "PITCHER")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(Theme.secondaryText)
+                .kerning(1.2)
+
+            // Name · position · handedness
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(player.fullName.uppercased())
                     .font(.system(size: 21, weight: .semibold))
                     .foregroundColor(Theme.primaryText)
@@ -43,30 +51,23 @@ struct MatchupBlockView: View {
                 }
             }
 
-            // Age · Height · Weight · Team
-            HStack(spacing: 8) {
-                if let age = player.ageString {
-                    metaChip(age)
-                    Text("·").labelFont(size: 13)
+            // Game stats
+            if role == .batter, let g = batterGame {
+                Text(g.display)
+                    .statFont(size: 14)
+                    .foregroundColor(Theme.secondaryText)
+                    .padding(.top, 1)
+            } else if role == .pitcher, let g = pitcherGame {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(g.pitchLine)
+                        .statFont(size: 14)
+                        .foregroundColor(Theme.secondaryText)
+                    Text(g.statLine)
+                        .statFont(size: 14)
+                        .foregroundColor(Theme.secondaryText)
                 }
-                if let h = player.heightString {
-                    metaChip(h)
-                    Text("·").labelFont(size: 13)
-                }
-                if let w = player.weightLbs {
-                    metaChip("\(w)")
-                    if let abbr = player.teamAbbreviation {
-                        Text("·").labelFont(size: 13)
-                        Text(abbr)
-                            .labelFont(size: 13)
-                    }
-                }
+                .padding(.top, 1)
             }
         }
-    }
-
-    private func metaChip(_ text: String) -> some View {
-        Text(text)
-            .labelFont(size: 13)
     }
 }

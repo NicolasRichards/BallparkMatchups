@@ -234,10 +234,21 @@ struct LiveFeedResponse: Codable {
                         let gameStatus: GameStatus?
 
                         struct BoxStats: Codable {
+                            let batting: BattingStats?
                             let pitching: PitchingStats?
+
+                            struct BattingStats: Codable {
+                                let atBats: Int?
+                                let hits: Int?
+                                let rbi: Int?
+                            }
 
                             struct PitchingStats: Codable {
                                 let numberOfPitches: Int?
+                                let strikes: Int?
+                                let inningsPitched: String?
+                                let strikeOuts: Int?
+                                let earnedRuns: Int?
                             }
                         }
 

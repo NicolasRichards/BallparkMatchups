@@ -319,7 +319,9 @@ final class GameViewModel: ObservableObject {
                     pitcher: card.pitcher,
                     situation: newSit,
                     bvp: card.bvp,
-                    splits: card.splits
+                    splits: card.splits,
+                    batterGame: card.batterGame,
+                    pitcherGame: card.pitcherGame
                 ))
             }
 
@@ -393,7 +395,9 @@ final class GameViewModel: ObservableObject {
             pitcher: existing.pitcher,
             situation: sit,
             bvp: existing.bvp,
-            splits: finalSplits
+            splits: finalSplits,
+            batterGame: existing.batterGame,
+            pitcherGame: existing.pitcherGame
         ))
     }
 
@@ -477,12 +481,17 @@ final class GameViewModel: ObservableObject {
         debugInfo.candidateSplits = candidateCount
         debugInfo.shownSplits = finalSplits.count
 
+        let batterGame = extractBatterGame(playerId: tick.batterId, feed: feed)
+        let pitcherGame = extractPitcherGame(playerId: tick.pitcherId, feed: feed)
+
         uiState = .live(MatchupCard(
             batter: bInfo,
             pitcher: pInfo,
             situation: sit,
             bvp: bvp,
-            splits: finalSplits
+            splits: finalSplits,
+            batterGame: batterGame,
+            pitcherGame: pitcherGame
         ))
     }
 
@@ -592,6 +601,32 @@ final class GameViewModel: ObservableObject {
         }
 
         return (result, batterSplits.count + pitcherSplits.count)
+    }
+
+    private func extractBatterGame(playerId: Int, feed: LiveFeedResponse) -> BatterGameLine? {
+        guard let boxTeams = feed.liveData?.boxscore?.teams else { return nil }
+        let key = "ID\(playerId)"
+        let player = boxTeams.home?.players?[key] ?? boxTeams.away?.players?[key]
+        guard let batting = player?.stats?.batting else { return nil }
+        return BatterGameLine(
+            atBats: batting.atBats ?? 0,
+            hits: batting.hits ?? 0,
+            rbi: batting.rbi ?? 0
+        )
+    }
+
+    private func extractPitcherGame(playerId: Int, feed: LiveFeedResponse) -> PitcherGameLine? {
+        guard let boxTeams = feed.liveData?.boxscore?.teams else { return nil }
+        let key = "ID\(playerId)"
+        let player = boxTeams.home?.players?[key] ?? boxTeams.away?.players?[key]
+        guard let pitching = player?.stats?.pitching else { return nil }
+        return PitcherGameLine(
+            pitches: pitching.numberOfPitches ?? 0,
+            strikes: pitching.strikes ?? 0,
+            inningsPitched: pitching.inningsPitched ?? "0.0",
+            strikeOuts: pitching.strikeOuts ?? 0,
+            earnedRuns: pitching.earnedRuns ?? 0
+        )
     }
 
     private func currentPitchCount(in feed: LiveFeedResponse?) -> Int? {

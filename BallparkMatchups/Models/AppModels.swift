@@ -166,6 +166,31 @@ struct SituationStrip {
     var countDisplay: String { "\(balls)-\(strikes)" }
 }
 
+// MARK: - Game Lines
+
+struct BatterGameLine {
+    let atBats: Int
+    let hits: Int
+    let rbi: Int
+
+    var display: String {
+        var parts = ["\(hits)-\(atBats)"]
+        if rbi > 0 { parts.append("\(rbi) RBI") }
+        return parts.joined(separator: ", ")
+    }
+}
+
+struct PitcherGameLine {
+    let pitches: Int
+    let strikes: Int
+    let inningsPitched: String  // e.g. "0.1", "3.0"
+    let strikeOuts: Int
+    let earnedRuns: Int
+
+    var pitchLine: String { "\(pitches) P · \(strikes) S" }
+    var statLine: String { "\(inningsPitched) IP, \(strikeOuts) K, \(earnedRuns) ER" }
+}
+
 // MARK: - Matchup Card
 
 struct MatchupCard {
@@ -174,6 +199,8 @@ struct MatchupCard {
     let situation: SituationStrip
     let bvp: BvPLine?
     let splits: [SplitLine]   // ranked, filtered, max 4
+    let batterGame: BatterGameLine?
+    let pitcherGame: PitcherGameLine?
 }
 
 // MARK: - Polling Diff

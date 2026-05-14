@@ -6,7 +6,12 @@ struct LiveCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             SituationStripView(situation: card.situation)
-            MatchupBlockView(batter: card.batter, pitcher: card.pitcher)
+            MatchupBlockView(
+                batter: card.batter,
+                pitcher: card.pitcher,
+                batterGame: card.batterGame,
+                pitcherGame: card.pitcherGame
+            )
 
             if let bvp = card.bvp {
                 BvPCardView(bvp: bvp)
