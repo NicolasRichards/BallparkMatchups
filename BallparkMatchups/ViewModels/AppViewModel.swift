@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import CoreLocation
+import Combine
 
 @MainActor
 final class AppViewModel: ObservableObject {
@@ -17,6 +18,7 @@ final class AppViewModel: ObservableObject {
     private let venueCache = VenueCache.shared
     private let api = MLBAPIClient.shared
     private let sessionKey = "activeSession_v1"
+    private var gameStateObserver: AnyCancellable?
 
     // MARK: - Boot
 
@@ -96,6 +98,25 @@ final class AppViewModel: ObservableObject {
             resolvedAt: Date(),
             lastKnownState: nil
         ))
+
+        // Update lastKnownState when the game ends so session restore
+        // correctly skips it on the next launch.
+        gameStateObserver = vm.$uiState
+            .receive(on: RunLoop.main)
+            .sink { [weak self] newState in
+                guard let self else { return }
+                let label: String?
+                switch newState {
+                case .final_:     label = "Final"
+                case .postponed:  label = "Postponed"
+                case .suspended:  label = "Suspended"
+                default:          label = nil
+                }
+                if let label, var session = self.loadSession() {
+                    session.lastKnownState = label
+                    self.saveSession(session)
+                }
+            }
     }
 
     func leaveGame() {
