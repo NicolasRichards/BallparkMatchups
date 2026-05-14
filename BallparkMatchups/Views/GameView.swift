@@ -32,13 +32,20 @@ struct GameView: View {
     // MARK: - Top Bar
 
     private var topBar: some View {
-        HStack {
+        HStack(spacing: 0) {
             Button {
                 app.leaveGame()
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(Theme.primaryText)
+            }
+
+            if let score = vm.scoreDisplay {
+                Text("\(score.awayAbbr) \(score.awayScore)  \(score.homeAbbr) \(score.homeScore)")
+                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .foregroundColor(Theme.primaryText)
+                    .padding(.leading, 14)
             }
 
             Spacer()

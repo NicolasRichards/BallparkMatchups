@@ -24,7 +24,9 @@ struct BetweenInningsCardView: View {
         "The organ deserves better attendance.",
         "Standing up counts as exercise.",
         "This is when you text back.",
-        "The vendor knows what you want."
+        "The vendor knows what you want.",
+        "Ice cream time, give your tongue a sleigh ride.",
+        "Those ballpark snacks won't eat themselves."
     ]
 
     private var inningLabel: String {

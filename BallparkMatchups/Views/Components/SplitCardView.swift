@@ -1,5 +1,69 @@
 import SwiftUI
 
+// MARK: - Grouped batter splits (rounded rectangle with year header)
+
+struct BatterSplitsGroupView: View {
+    let splits: [SplitLine]
+
+    private var year: String { splits.first?.scope ?? "" }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header row: label + year
+            HStack {
+                Text("SPLITS")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(Theme.secondaryText)
+                    .kerning(1.2)
+                Spacer()
+                Text(year)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Theme.secondaryText)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
+            Divider().background(Color(hex: "#2A3A2A"))
+
+            ForEach(splits.indices, id: \.self) { i in
+                splitRow(splits[i])
+                if i < splits.count - 1 {
+                    Divider()
+                        .background(Color(hex: "#222222"))
+                        .padding(.horizontal, 14)
+                }
+            }
+        }
+        .background(Theme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func splitRow(_ split: SplitLine) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(split.label.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(Theme.secondaryText)
+                .kerning(1.2)
+
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text("\(split.avg) / \(split.obp) / \(split.slg)")
+                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                    .foregroundColor(Theme.primaryText)
+                    .monospacedDigit()
+
+                Spacer()
+
+                Text("(\(split.pa) PA)")
+                    .labelFont(size: 12)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Standalone pitcher split card (unchanged style)
+
 struct SplitCardView: View {
     let split: SplitLine
 

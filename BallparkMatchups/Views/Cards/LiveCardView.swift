@@ -17,8 +17,12 @@ struct LiveCardView: View {
                 BvPCardView(bvp: bvp)
             }
 
-            ForEach(card.splits.indices, id: \.self) { i in
-                SplitCardView(split: card.splits[i])
+            if !card.batterSplits.isEmpty {
+                BatterSplitsGroupView(splits: card.batterSplits)
+            }
+
+            if let pitcherSplit = card.pitcherSplit {
+                SplitCardView(split: pitcherSplit)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: card.situation.displayInning)

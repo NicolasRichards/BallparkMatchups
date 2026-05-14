@@ -191,6 +191,15 @@ struct PitcherGameLine {
     var statLine: String { "\(inningsPitched) IP, \(strikeOuts) K, \(earnedRuns) ER" }
 }
 
+// MARK: - Score Display
+
+struct ScoreDisplay {
+    let awayAbbr: String
+    let awayScore: Int
+    let homeAbbr: String
+    let homeScore: Int
+}
+
 // MARK: - Matchup Card
 
 struct MatchupCard {
@@ -198,7 +207,8 @@ struct MatchupCard {
     let pitcher: PlayerInfo
     let situation: SituationStrip
     let bvp: BvPLine?
-    let splits: [SplitLine]   // ranked, filtered, max 4
+    let batterSplits: [SplitLine]   // batter situational splits, max 3
+    let pitcherSplit: SplitLine?    // single pitcher split, distinct sitCode from batter splits
     let batterGame: BatterGameLine?
     let pitcherGame: PitcherGameLine?
 }

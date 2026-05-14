@@ -59,6 +59,7 @@ final class GameViewModel: ObservableObject {
     @Published var uiState: GameUIState = .loading
     @Published var connectionStatus: ConnectionStatus = .ok
     @Published var lastUpdated: Date?
+    @Published var scoreDisplay: ScoreDisplay?
 
     // Debug overlay data
     @Published var debugInfo: DebugInfo = DebugInfo()
@@ -162,6 +163,16 @@ final class GameViewModel: ObservableObject {
     // MARK: - Feed Processing
 
     private func processFeed(_ feed: LiveFeedResponse) async {
+        // Always refresh the score header from the latest linescore
+        if let ls = feed.liveData?.linescore?.teams {
+            scoreDisplay = ScoreDisplay(
+                awayAbbr: feed.gameData.teams.away.abbreviation ?? String(feed.gameData.teams.away.name.prefix(3)).uppercased(),
+                awayScore: ls.away.runs ?? 0,
+                homeAbbr: feed.gameData.teams.home.abbreviation ?? String(feed.gameData.teams.home.name.prefix(3)).uppercased(),
+                homeScore: ls.home.runs ?? 0
+            )
+        }
+
         let status = feed.gameData.status.detailedState
 
         switch status {
@@ -319,7 +330,8 @@ final class GameViewModel: ObservableObject {
                     pitcher: card.pitcher,
                     situation: newSit,
                     bvp: card.bvp,
-                    splits: card.splits,
+                    batterSplits: card.batterSplits,
+                    pitcherSplit: card.pitcherSplit,
                     batterGame: card.batterGame,
                     pitcherGame: extractPitcherGame(playerId: newTick.pitcherId, feed: feed)
                 ))
@@ -379,7 +391,7 @@ final class GameViewModel: ObservableObject {
         )
         let allPitcherSplits = careerPitcherSplits + seasonPitcherSplits
 
-        let (finalSplits, candidateCount) = buildSplitCards(
+        let (newBatterSplits, newPitcherSplit, candidateCount) = buildSplitCards(
             tick: tick,
             batterSplits: allBatterSplits,
             pitcherSplits: allPitcherSplits,
@@ -388,14 +400,15 @@ final class GameViewModel: ObservableObject {
             careerOPS: careerOPS
         )
         debugInfo.candidateSplits = candidateCount
-        debugInfo.shownSplits = finalSplits.count
+        debugInfo.shownSplits = newBatterSplits.count + (newPitcherSplit != nil ? 1 : 0)
 
         uiState = .live(MatchupCard(
             batter: existing.batter,
             pitcher: existing.pitcher,
             situation: sit,
             bvp: existing.bvp,
-            splits: finalSplits,
+            batterSplits: newBatterSplits,
+            pitcherSplit: newPitcherSplit,
             batterGame: existing.batterGame,
             pitcherGame: extractPitcherGame(playerId: tick.pitcherId, feed: feed)
         ))
@@ -470,7 +483,7 @@ final class GameViewModel: ObservableObject {
         let allPitcherSplits = careerPitcher + seasonPitcher
         let pitchCount = currentPitchCount(in: feed)
 
-        let (finalSplits, candidateCount) = buildSplitCards(
+        let (newBatterSplits, newPitcherSplit, candidateCount) = buildSplitCards(
             tick: tick,
             batterSplits: allBatterSplits,
             pitcherSplits: allPitcherSplits,
@@ -479,7 +492,7 @@ final class GameViewModel: ObservableObject {
             careerOPS: bvp?.ops
         )
         debugInfo.candidateSplits = candidateCount
-        debugInfo.shownSplits = finalSplits.count
+        debugInfo.shownSplits = newBatterSplits.count + (newPitcherSplit != nil ? 1 : 0)
 
         let batterGame = extractBatterGame(playerId: tick.batterId, feed: feed)
         let pitcherGame = extractPitcherGame(playerId: tick.pitcherId, feed: feed)
@@ -489,7 +502,8 @@ final class GameViewModel: ObservableObject {
             pitcher: pInfo,
             situation: sit,
             bvp: bvp,
-            splits: finalSplits,
+            batterSplits: newBatterSplits,
+            pitcherSplit: newPitcherSplit,
             batterGame: batterGame,
             pitcherGame: pitcherGame
         ))
@@ -578,9 +592,7 @@ final class GameViewModel: ObservableObject {
         pitchCount: Int?,
         isFirstBatter: Bool,
         careerOPS: Double?
-    ) -> (splits: [SplitLine], candidateCount: Int) {
-        var result: [SplitLine] = []
-
+    ) -> (batterSplits: [SplitLine], pitcherSplit: SplitLine?, candidateCount: Int) {
         let isReliever = (pitcherFirstAtBat[tick.pitcherId].map { $0 > 0 }) ?? false
         let pitcherHand = playerCache[tick.pitcherId]?.pitchHand
 
@@ -591,24 +603,20 @@ final class GameViewModel: ObservableObject {
             careerOPS: careerOPS,
             maxCount: 3
         )
-        result.append(contentsOf: batter3)
 
-        if let pitcherCard = SplitPriorityEngine.selectPitcherSplit(
+        // Omit pitcher split if it shares a sitCode with a batter split already shown
+        let pitcherSplit: SplitLine? = SplitPriorityEngine.selectPitcherSplit(
             tickState: tick,
             splits: pitcherSplits,
             currentPitchCount: pitchCount,
             isReliever: isReliever,
             isFirstBatter: isFirstBatter,
             careerOPS: nil
-        ) {
-            // Don't show a pitcher split with the same sitCode as a batter split already shown —
-            // it would display as an identical label (e.g. "VS LEFT" twice).
-            if !result.contains(where: { $0.sitCode == pitcherCard.sitCode }) {
-                result.append(pitcherCard)
-            }
+        ).flatMap { card in
+            batter3.contains(where: { $0.sitCode == card.sitCode }) ? nil : card
         }
 
-        return (result, batterSplits.count + pitcherSplits.count)
+        return (batter3, pitcherSplit, batterSplits.count + pitcherSplits.count)
     }
 
     private func extractBatterGame(playerId: Int, feed: LiveFeedResponse) -> BatterGameLine? {
