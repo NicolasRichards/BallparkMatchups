@@ -191,6 +191,13 @@ struct LiveFeedResponse: Codable {
                 let onFirst: PlayerRef?
                 let onSecond: PlayerRef?
                 let onThird: PlayerRef?
+
+                enum CodingKeys: String, CodingKey {
+                    case batter
+                    case onFirst  = "first"
+                    case onSecond = "second"
+                    case onThird  = "third"
+                }
             }
 
             struct Defense: Codable {
