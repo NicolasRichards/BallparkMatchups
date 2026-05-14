@@ -26,6 +26,7 @@ struct SplitPriorityEngine {
     static func selectBatterSplits(
         tickState: TickState,
         splits: [SplitLine],
+        pitcherHand: Handedness?,
         careerOPS: Double?,
         maxCount: Int = 3
     ) -> [SplitLine] {
@@ -57,8 +58,12 @@ struct SplitPriorityEngine {
             candidates.append("c\(leverageCount)")
         }
 
-        candidates.append("vl")
-        candidates.append("vr")
+        // Only show the split matching the actual pitcher's hand
+        switch pitcherHand {
+        case .left:                  candidates.append("vl")
+        case .right, .switchHitter:  candidates.append("vr")
+        case nil:                    candidates.append("vr")  // default
+        }
 
         if strikes == 2 { candidates.append("2s") }
 

@@ -138,11 +138,8 @@ final class GameViewModel: ObservableObject {
         pollInFlight = true
         defer { pollInFlight = false }
 
-        let useTimecode = !isFirstPoll
-        isFirstPoll = false
-
         do {
-            let feed = try await api.fetchLiveFeed(gamePk: gamePk, useTimecode: useTimecode)
+            let feed = try await api.fetchLiveFeed(gamePk: gamePk)
             consecutiveFailures = 0
             connectionStatus = .ok
             requestCount += 1
@@ -572,10 +569,12 @@ final class GameViewModel: ObservableObject {
         var result: [SplitLine] = []
 
         let isReliever = (pitcherFirstAtBat[tick.pitcherId].map { $0 > 0 }) ?? false
+        let pitcherHand = playerCache[tick.pitcherId]?.pitchHand
 
         let batter3 = SplitPriorityEngine.selectBatterSplits(
             tickState: tick,
             splits: batterSplits,
+            pitcherHand: pitcherHand,
             careerOPS: careerOPS,
             maxCount: 3
         )

@@ -3,8 +3,6 @@ import SwiftUI
 struct BetweenInningsCardView: View {
     let info: BetweenInningsInfo
     @State private var currentLine = ""
-    @State private var lineIndex = 0
-    private let rotationInterval: TimeInterval = 9
 
     private let genericLines = [
         "Beer line's shorter now.",
@@ -55,9 +53,6 @@ struct BetweenInningsCardView: View {
             Text(isSeventhStretch ? "Take Me Out to the Ball Game." : currentLine)
                 .labelFont(size: 17)
                 .fixedSize(horizontal: false, vertical: true)
-                .transition(.opacity)
-                .id(lineIndex)
-                .animation(.easeInOut(duration: 0.4), value: lineIndex)
 
             if !isSeventhStretch {
                 Text("(\(info.nextTeam) coming to bat)")
@@ -66,17 +61,11 @@ struct BetweenInningsCardView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
-        .onAppear { startRotation() }
+        .onAppear { pickMessage() }
     }
 
-    private func startRotation() {
+    private func pickMessage() {
         currentLine = genericLines.randomElement() ?? genericLines[0]
-        guard !isSeventhStretch else { return }
-
-        Timer.scheduledTimer(withTimeInterval: rotationInterval, repeats: true) { t in
-            lineIndex += 1
-            currentLine = genericLines[lineIndex % genericLines.count]
-        }
     }
 
     private func ordinal(_ n: Int) -> String {

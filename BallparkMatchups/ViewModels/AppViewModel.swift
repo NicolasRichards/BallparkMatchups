@@ -22,7 +22,7 @@ final class AppViewModel: ObservableObject {
 
     func onAppear() async {
         await venueCache.load()
-        await venueCache.reloadIfNeeded()
+        Task { await venueCache.reloadIfNeeded() }  // background, don't block launch
         await restoreSessionIfValid()
     }
 
@@ -83,6 +83,9 @@ final class AppViewModel: ObservableObject {
     // MARK: - Game Launch
 
     func launchGame(gamePk: Int, venueName: String) {
+        // Guard against double-launch (e.g. rapid taps or session restore race)
+        guard gameVM == nil || gameVM?.gamePk != gamePk else { return }
+        gameVM?.stopPolling()
         let vm = GameViewModel(gamePk: gamePk, venueName: venueName)
         gameVM = vm
         state = .game
