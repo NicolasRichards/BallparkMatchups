@@ -11,7 +11,7 @@ struct BatterSplitsGroupView: View {
         VStack(spacing: 0) {
             // Header row: label + year
             HStack {
-                Text("SPLITS")
+                Text("BATTER SPLITS")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(Theme.secondaryText)
                     .kerning(1.2)
@@ -28,8 +28,9 @@ struct BatterSplitsGroupView: View {
             ForEach(splits.indices, id: \.self) { i in
                 splitRow(splits[i])
                 if i < splits.count - 1 {
-                    Divider()
-                        .background(Color(hex: "#222222"))
+                    Rectangle()
+                        .fill(Color(hex: "#222222"))
+                        .frame(height: 1)
                         .padding(.horizontal, 14)
                 }
             }
