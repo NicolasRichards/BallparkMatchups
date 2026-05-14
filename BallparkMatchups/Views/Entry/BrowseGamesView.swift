@@ -2,13 +2,13 @@ import SwiftUI
 
 struct BrowseGamesView: View {
     @EnvironmentObject private var app: AppViewModel
-    @State private var filter: GameFilter = .all
+    @State private var filter: GameFilter = .mlb
 
     enum GameFilter: String, CaseIterable {
-        case all = "All"
-        case live = "Live"
         case mlb = "MLB"
         case milb = "MiLB"
+        case live = "Live"
+        case all = "All"
     }
 
     var body: some View {
