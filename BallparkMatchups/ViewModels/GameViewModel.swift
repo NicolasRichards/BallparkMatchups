@@ -304,7 +304,7 @@ final class GameViewModel: ObservableObject {
         // Fetch data based on refresh kind
         switch refreshKind {
         case .countOnly:
-            // Just update the count in existing card
+            // Update count + pitcher game stats (pitch count changes every pitch)
             if case .live(let card) = uiState {
                 let newSit = SituationStrip(
                     inning: card.situation.inning,
@@ -321,12 +321,12 @@ final class GameViewModel: ObservableObject {
                     bvp: card.bvp,
                     splits: card.splits,
                     batterGame: card.batterGame,
-                    pitcherGame: card.pitcherGame
+                    pitcherGame: extractPitcherGame(playerId: newTick.pitcherId, feed: feed)
                 ))
             }
 
         case .situational:
-            await refreshSituational(tick: newTick, isFirstBatter: isFirstBatter)
+            await refreshSituational(tick: newTick, feed: feed, isFirstBatter: isFirstBatter)
 
         case .full:
             await refreshFull(tick: newTick, feed: feed, isFirstBatter: isFirstBatter)
@@ -340,7 +340,7 @@ final class GameViewModel: ObservableObject {
 
     // MARK: - Situational Refresh
 
-    private func refreshSituational(tick: TickState, isFirstBatter: Bool) async {
+    private func refreshSituational(tick: TickState, feed: LiveFeedResponse, isFirstBatter: Bool) async {
         guard case .live(let existing) = uiState else { return }
 
         let runners = RunnersState.from(
@@ -397,7 +397,7 @@ final class GameViewModel: ObservableObject {
             bvp: existing.bvp,
             splits: finalSplits,
             batterGame: existing.batterGame,
-            pitcherGame: existing.pitcherGame
+            pitcherGame: extractPitcherGame(playerId: tick.pitcherId, feed: feed)
         ))
     }
 
