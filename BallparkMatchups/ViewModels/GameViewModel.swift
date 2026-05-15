@@ -254,6 +254,15 @@ final class GameViewModel: ObservableObject {
         // Between-innings
         if inningState == "End" || inningState == "Middle" {
             let inning = linescore.currentInning ?? 1
+            let homeRuns = linescore.teams?.home.runs ?? 0
+            let awayRuns = linescore.teams?.away.runs ?? 0
+
+            // End of 9th+ with home team leading: no bottom half needed, game is over.
+            // Don't show between-innings — the next poll will return Final.
+            if inningState == "End" && inning >= 9 && homeRuns > awayRuns {
+                return
+            }
+
             let nextTeam: String = {
                 if inningState == "End" {
                     return feed.gameData.teams.away.abbreviation ?? feed.gameData.teams.away.name
