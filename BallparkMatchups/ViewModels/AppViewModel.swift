@@ -19,6 +19,7 @@ final class AppViewModel: ObservableObject {
     private let api = MLBAPIClient.shared
     private let sessionKey = "activeSession_v1"
     private var gameStateObserver: AnyCancellable?
+    private var gameReturnState: AppState = .entry
 
     // MARK: - Boot
 
@@ -79,6 +80,7 @@ final class AppViewModel: ObservableObject {
     }
 
     func selectGame(_ summary: GameSummary) async {
+        gameReturnState = .browseGames
         launchGame(gamePk: summary.gamePk, venueName: summary.venueName)
     }
 
@@ -123,7 +125,8 @@ final class AppViewModel: ObservableObject {
         gameVM?.stopPolling()
         gameVM = nil
         clearSession()
-        state = .entry
+        state = gameReturnState
+        gameReturnState = .entry  // reset for next time
     }
 
     // MARK: - Session Restore
