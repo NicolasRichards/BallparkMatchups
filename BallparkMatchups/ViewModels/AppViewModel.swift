@@ -234,9 +234,18 @@ final class AppViewModel: ObservableObject {
     }
 
     private func todayDateString() -> String {
+        // Baseball day rolls over at 3am ET so late West Coast games
+        // remain visible after local midnight.
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York")!
+        let hourET = cal.component(.hour, from: Date())
+        let base = hourET < 3
+            ? cal.date(byAdding: .day, value: -1, to: Date()) ?? Date()
+            : Date()
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: Date())
+        f.timeZone = TimeZone(identifier: "America/New_York")!
+        return f.string(from: base)
     }
 
     // MARK: - Session Persistence
