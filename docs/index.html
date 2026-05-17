@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ballpark Matchups</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background-color: #0A1A0A;
+      color: #F5F5F5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 60px 24px;
+    }
+
+    .icon {
+      width: 120px;
+      height: 120px;
+      border-radius: 26px;
+      margin-bottom: 32px;
+    }
+
+    h1 {
+      font-size: 36px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+
+    .tagline {
+      font-size: 18px;
+      color: #888888;
+      margin-bottom: 48px;
+    }
+
+    h2 {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      color: #888888;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      margin-top: 48px;
+    }
+
+    p {
+      font-size: 16px;
+      color: #CCCCCC;
+      margin-bottom: 16px;
+    }
+
+    ul {
+      list-style: none;
+      margin-bottom: 16px;
+    }
+
+    ul li {
+      font-size: 16px;
+      color: #CCCCCC;
+      padding: 6px 0;
+      border-bottom: 1px solid #1A2A1A;
+    }
+
+    ul li:last-child {
+      border-bottom: none;
+    }
+
+    ul li::before {
+      content: "→ ";
+      color: #888888;
+    }
+
+    a {
+      color: #6DB36D;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #1A2A1A;
+      margin: 48px 0;
+    }
+
+    .footer {
+      font-size: 13px;
+      color: #555555;
+      margin-top: 64px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <h1>Ballpark Matchups</h1>
+    <p class="tagline">Live batter vs. pitcher stats. Nothing else.</p>
+
+    <p>
+      Ballpark Matchups delivers exactly what you need to know, exactly when you need it —
+      and nothing else. Open the app, see the current batter, the pitcher, and the situational
+      stats that matter right now. No graphics, no animations, no ads. Just clean, fast data
+      pulled live from the MLB feed. Glance at it between pitches, put your phone down, and
+      get back to watching the game.
+    </p>
+
+    <h2>Features</h2>
+    <ul>
+      <li>Live batter vs. pitcher matchup data, updated every 12 seconds</li>
+      <li>Situational splits: RISP, bases loaded, late &amp; close, pitch count, and more</li>
+      <li>Current game stats for both batter and pitcher</li>
+      <li>Covers MLB and MiLB games</li>
+      <li>Detect your ballpark automatically, or browse today's games</li>
+      <li>No ads, no account required, no distractions</li>
+    </ul>
+
+    <hr class="divider">
+
+    <h2>Support</h2>
+    <p>
+      For questions, bug reports, or feedback, email:<br>
+      <a href="mailto:nicolasrichards@me.com">nicolasrichards@me.com</a>
+    </p>
+
+    <hr class="divider">
+
+    <h2>Privacy Policy</h2>
+    <p>
+      Ballpark Matchups does not collect, store, or share any personal data.
+      The app requests your location only to identify which ballpark you are at;
+      this location is never transmitted off your device or stored anywhere.
+      No analytics, no tracking, no account required.
+    </p>
+    <p>
+      Live game data is fetched from the publicly available MLB Stats API
+      (<a href="https://statsapi.mlb.com" target="_blank">statsapi.mlb.com</a>)
+      for personal, non-commercial use.
+    </p>
+
+    <div class="footer">
+      <p>© 2026 Nicolas Richards &nbsp;·&nbsp;
+        <a href="mailto:nicolasrichards@me.com">Contact</a>
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>
