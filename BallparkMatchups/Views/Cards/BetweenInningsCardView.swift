@@ -25,7 +25,7 @@ struct BetweenInningsCardView: View {
         "Standing up counts as exercise.",
         "This is when you text back.",
         "The vendor knows what you want.",
-        "Ice cream time, give your tongue a sleigh ride.",
+        "Ice cream, get your ice cream, give your tongue a sleigh ride.",
         "Those ballpark snacks won't eat themselves."
     ]
 

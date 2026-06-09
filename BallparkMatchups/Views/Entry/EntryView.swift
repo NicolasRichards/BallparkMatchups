@@ -97,7 +97,7 @@ struct EntryView: View {
                 HStack {
                     Image(systemName: "location.fill")
                         .font(.system(size: 16))
-                    Text("Detect where I am")
+                    Text("At a ballpark? Detect where I am")
                         .font(.system(size: 17, weight: .semibold))
                 }
                 .frame(maxWidth: .infinity)
