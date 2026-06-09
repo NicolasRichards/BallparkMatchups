@@ -50,19 +50,6 @@ enum RunnersState: String {
         }
     }
 
-    var sitCode: String {
-        switch self {
-        case .empty: return "r0"
-        case .first: return "r1"
-        case .second: return "r2"
-        case .third: return "r3"
-        case .firstSecond: return "r12"
-        case .firstThird: return "r13"
-        case .secondThird: return "r23"
-        case .loaded: return "r123"
-        }
-    }
-
     static func from(onFirst: Bool, onSecond: Bool, onThird: Bool) -> RunnersState {
         switch (onFirst, onSecond, onThird) {
         case (false, false, false): return .empty
@@ -234,6 +221,7 @@ enum RefreshKind {
 func diffTickState(old: TickState?, new: TickState) -> RefreshKind {
     guard let old else { return .full }
     if new.atBatIndex != old.atBatIndex { return .full }
+    if new.batterId != old.batterId { return .full }   // mid-AB pinch hitter
     if new.pitcherId != old.pitcherId { return .full }
     if new.outs != old.outs || new.runnersCode != old.runnersCode { return .situational }
     if new.balls != old.balls || new.strikes != old.strikes { return .countOnly }

@@ -5,18 +5,23 @@ import SwiftUI
 struct BatterSplitsGroupView: View {
     let splits: [SplitLine]
 
-    private var year: String { splits.first?.scope ?? "" }
+    // Rows can mix career and season splits; only show a scope in the header
+    // when it applies to every row, otherwise label each row individually.
+    private var uniformScope: String? {
+        let scopes = Set(splits.map(\.scope))
+        return scopes.count == 1 ? scopes.first : nil
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header row: label + year
+            // Header row: label + scope (when uniform)
             HStack {
                 Text("BATTER SPLITS")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(Theme.secondaryText)
                     .kerning(1.2)
                 Spacer()
-                Text(year)
+                Text(uniformScope ?? "")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(Theme.secondaryText)
             }
@@ -54,7 +59,7 @@ struct BatterSplitsGroupView: View {
 
                 Spacer()
 
-                Text("(\(split.pa) PA)")
+                Text(uniformScope == nil ? "(\(split.pa) PA · \(split.scope))" : "(\(split.pa) PA)")
                     .labelFont(size: 12)
             }
         }

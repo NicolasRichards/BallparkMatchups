@@ -107,6 +107,7 @@ struct LiveFeedResponse: Codable {
         struct GameStatus: Codable {
             let detailedState: String
             let statusCode: String?
+            let reason: String?   // e.g. "Rain" when postponed/delayed
         }
 
         struct GameDatetime: Codable {
@@ -293,6 +294,7 @@ struct StatsResponse: Codable {
 
             struct StatLine: Codable {
                 let plateAppearances: Int?
+                let battersFaced: Int?   // pitching splits report BF instead of PA
                 let atBats: Int?
                 let hits: Int?
                 let avg: String?

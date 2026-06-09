@@ -5,7 +5,6 @@ actor MLBAPIClient {
 
     private let baseURL = "https://statsapi.mlb.com"
     private let session: URLSession
-    private var liveFeedTimecode: String?
 
     private init() {
         let config = URLSessionConfiguration.default
@@ -33,18 +32,9 @@ actor MLBAPIClient {
 
     // MARK: - Live Feed (GUMBO)
 
-    func fetchLiveFeed(gamePk: Int, useTimecode: Bool = false) async throws -> LiveFeedResponse {
-        var url = "\(baseURL)/api/v1.1/game/\(gamePk)/feed/live"
-        if useTimecode, let tc = liveFeedTimecode {
-            url += "?timecode=\(tc)"
-        }
-        let response = try await fetch(LiveFeedResponse.self, from: url)
-        liveFeedTimecode = response.metaData.timeStamp
-        return response
-    }
-
-    func resetTimecode() {
-        liveFeedTimecode = nil
+    func fetchLiveFeed(gamePk: Int) async throws -> LiveFeedResponse {
+        let url = "\(baseURL)/api/v1.1/game/\(gamePk)/feed/live"
+        return try await fetch(LiveFeedResponse.self, from: url)
     }
 
     // MARK: - BvP Stats
@@ -72,32 +62,10 @@ actor MLBAPIClient {
         return try await fetch(PlayerResponse.self, from: url)
     }
 
-    // MARK: - Batch Players
-
-    func fetchPlayers(ids: [Int]) async throws -> PlayerResponse {
-        let idString = ids.map { String($0) }.joined(separator: ",")
-        let url = "\(baseURL)/api/v1/people?personIds=\(idString)&hydrate=currentTeam"
-        return try await fetch(PlayerResponse.self, from: url)
-    }
-
-    // MARK: - Next Home Game
-
-    func fetchNextHomeGame(venueId: Int, teamId: Int) async throws -> ScheduleResponse {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MM/dd/yyyy"
-        let startDate = formatter.string(from: Date())
-        let endDate: String = {
-            let future = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
-            return formatter.string(from: future)
-        }()
-        let url = "\(baseURL)/api/v1/schedule?sportId=1,11,12,13,14&teamId=\(teamId)&startDate=\(startDate)&endDate=\(endDate)&venueIds=\(venueId)&hydrate=team&gameTypes=R,F,D,L,W"
-        return try await fetch(ScheduleResponse.self, from: url)
-    }
-
     // MARK: - Private
 
     private func fetch<T: Decodable>(_ type: T.Type, from urlString: String) async throws -> T {
-        guard let url = URL(string: urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? urlString) else {
+        guard let url = URL(string: urlString) else {
             throw APIError.invalidURL(urlString)
         }
         do {

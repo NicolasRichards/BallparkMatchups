@@ -73,7 +73,8 @@ struct SplitPriorityEngine {
 
         for code in candidates {
             guard selected.count < maxCount else { break }
-            if let lines = splitMap[code], let best = lines.sorted(by: { $0.scope > $1.scope }).first {
+            if let lines = splitMap[code],
+               let best = lines.first(where: { $0.scope == "career" }) ?? lines.first {
                 selected.append(best)
             }
         }
@@ -108,7 +109,8 @@ struct SplitPriorityEngine {
         let splitMap = Dictionary(grouping: splits, by: \.sitCode)
 
         func best(_ code: String) -> SplitLine? {
-            splitMap[code]?.sorted(by: { $0.scope > $1.scope }).first
+            guard let lines = splitMap[code] else { return nil }
+            return lines.first(where: { $0.scope == "career" }) ?? lines.first
         }
 
         if isReliever && isFirstBatter, let s = best("fba") { return s }
@@ -131,12 +133,6 @@ struct SplitPriorityEngine {
         if let s = best("vl") ?? best("vr") { return s }
 
         return nil
-    }
-
-    // MARK: - PA Thresholds (§10.3)
-
-    static func passesBatterThreshold(pa: Int, isCareer: Bool) -> Bool {
-        isCareer ? pa >= 25 : pa >= 15
     }
 
     // MARK: - sitCode Labels
@@ -203,7 +199,8 @@ extension StatsResponse {
             for entry in group.splits {
                 guard
                     let code = entry.split?.code,
-                    let pa = entry.stat.plateAppearances,
+                    // Pitching splits report battersFaced instead of plateAppearances
+                    let pa = entry.stat.plateAppearances ?? entry.stat.battersFaced,
                     pa >= minPA,
                     let avg = entry.stat.avg,
                     let obp = entry.stat.obp,

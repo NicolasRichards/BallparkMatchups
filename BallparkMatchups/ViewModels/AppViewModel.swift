@@ -188,6 +188,8 @@ final class AppViewModel: ObservableObject {
         // Use a schedule range search for the venue
         let formatter = DateFormatter()
         formatter.dateFormat = "MM/dd/yyyy"
+        // POSIX locale: API dates must not depend on the device's calendar setting
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         let start = formatter.string(from: Date())
         let end: String = {
             let future = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
@@ -245,6 +247,8 @@ final class AppViewModel: ObservableObject {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         f.timeZone = TimeZone(identifier: "America/New_York")!
+        // POSIX locale: API dates must not depend on the device's calendar setting
+        f.locale = Locale(identifier: "en_US_POSIX")
         return f.string(from: base)
     }
 

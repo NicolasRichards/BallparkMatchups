@@ -42,6 +42,14 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
             break
         }
 
+        // If a previous request is still pending, resolve it before storing a new
+        // continuation — overwriting it would strand the earlier caller forever.
+        if let pending = continuation {
+            timeoutTask?.cancel()
+            continuation = nil
+            pending.resume(returning: .failed(nil))
+        }
+
         return await withCheckedContinuation { continuation in
             self.continuation = continuation
             self.startTimeout()

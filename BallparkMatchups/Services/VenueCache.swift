@@ -74,8 +74,6 @@ actor VenueCache {
         venues.first { $0.id == id }
     }
 
-    var allVenues: [CachedVenue] { venues }
-
     // MARK: - Persistence
 
     private func loadFromBundle() {
@@ -141,6 +139,8 @@ extension CachedVenue {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.timeZone = TimeZone(identifier: "America/New_York")!
+        // POSIX locale: API dates must not depend on the device's calendar setting
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter.string(from: base)
     }
 }

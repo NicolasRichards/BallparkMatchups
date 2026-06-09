@@ -68,7 +68,6 @@ final class GameViewModel: ObservableObject {
     private var lastTickState: TickState?
     private var consecutiveFailures = 0
     private var requestCount = 0
-    private var isFirstPoll = true
 
     // In-memory caches
     private var playerCache: [Int: PlayerInfo] = [:]
@@ -108,7 +107,6 @@ final class GameViewModel: ObservableObject {
     // MARK: - Lifecycle
 
     func startPolling() {
-        isFirstPoll = true
         pollingTask?.cancel()
         pollingTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -184,10 +182,13 @@ final class GameViewModel: ObservableObject {
             await handleInProgress(feed)
 
         case let s where s.hasPrefix("Delayed"):
-            let isPreGame = ["Scheduled", "Pre-Game", "Warmup"].contains(s)
+            // "Delayed Start: …" means first pitch hasn't happened; a delay with
+            // no current inning in the linescore is also pre-game.
+            let isPreGame = s.contains("Start")
+                || (feed.liveData?.linescore?.currentInning ?? 0) < 1
             uiState = .delay(DelayInfo(reason: s, isPreGame: isPreGame))
 
-        case "Suspended":
+        case let s where s.hasPrefix("Suspended"):
             uiState = .suspended
 
         case "Final", "Game Over", "Completed Early":
@@ -195,7 +196,8 @@ final class GameViewModel: ObservableObject {
             stopPolling()
 
         case "Postponed":
-            uiState = .postponed(extractPostponedReason(from: status))
+            // detailedState is just "Postponed" — the cause lives in status.reason
+            uiState = .postponed(feed.gameData.status.reason ?? "")
             stopPolling()
 
         default:
@@ -385,6 +387,7 @@ final class GameViewModel: ObservableObject {
         let seasonBatterSplits = await fetchSplits(
             playerId: tick.batterId,
             codes: SplitPriorityEngine.batterSitCodes,
+            group: "hitting",
             season: currentSeason(),
             isCareer: false
         )
@@ -392,11 +395,12 @@ final class GameViewModel: ObservableObject {
         let allBatterSplits = careerBatterSplits + seasonBatterSplits
         let careerOPS = careerBvPCache[BvPKey(batterId: tick.batterId, pitcherId: tick.pitcherId)]??.ops
 
-        let pitchCount = currentPitchCount(in: nil)
+        let pitchCount = currentPitchCount(pitcherId: tick.pitcherId, in: feed)
         let careerPitcherSplits = cachedSplits(for: tick.pitcherId, isCareer: true)
         let seasonPitcherSplits = await fetchSplits(
             playerId: tick.pitcherId,
             codes: SplitPriorityEngine.pitcherSitCodes,
+            group: "pitching",
             season: currentSeason(),
             isCareer: false
         )
@@ -458,12 +462,14 @@ final class GameViewModel: ObservableObject {
         async let seasonBatterSplitsResult = fetchSplits(
             playerId: tick.batterId,
             codes: SplitPriorityEngine.batterSitCodes,
+            group: "hitting",
             season: currentSeason(),
             isCareer: false
         )
         async let seasonPitcherSplitsResult = fetchSplits(
             playerId: tick.pitcherId,
             codes: SplitPriorityEngine.pitcherSitCodes,
+            group: "pitching",
             season: currentSeason(),
             isCareer: false
         )
@@ -492,7 +498,7 @@ final class GameViewModel: ObservableObject {
 
         let allBatterSplits = careerBatter + seasonBatter
         let allPitcherSplits = careerPitcher + seasonPitcher
-        let pitchCount = currentPitchCount(in: feed)
+        let pitchCount = currentPitchCount(pitcherId: tick.pitcherId, in: feed)
 
         let (newBatterSplits, newPitcherSplit, candidateCount) = buildSplitCards(
             tick: tick,
@@ -570,13 +576,12 @@ final class GameViewModel: ObservableObject {
         if !existing.isEmpty { return existing }
         // MLB's statSplits endpoint defaults to current season without a season param;
         // pass the current year explicitly so the label matches the data.
-        return await fetchSplits(playerId: playerId, codes: codes, season: currentSeason(), isCareer: true)
+        return await fetchSplits(playerId: playerId, codes: codes, group: group, season: currentSeason(), isCareer: true)
     }
 
-    private func fetchSplits(playerId: Int, codes: [String], season: Int?, isCareer: Bool) async -> [SplitLine] {
+    private func fetchSplits(playerId: Int, codes: [String], group: String, season: Int?, isCareer: Bool) async -> [SplitLine] {
         do {
             let minPA = isCareer ? 25 : 15
-            let group = "hitting"
             let resp = try await api.fetchSplits(playerId: playerId, sitCodes: codes, group: group, season: season)
             let scope = season.map { String($0) } ?? "career"
             let lines = resp.toSplitLines(scope: scope, minPA: minPA)
@@ -656,10 +661,8 @@ final class GameViewModel: ObservableObject {
         )
     }
 
-    private func currentPitchCount(in feed: LiveFeedResponse?) -> Int? {
-        guard let feed,
-              let boxTeams = feed.liveData?.boxscore?.teams,
-              let pitcherId = lastTickState?.pitcherId else { return nil }
+    private func currentPitchCount(pitcherId: Int, in feed: LiveFeedResponse) -> Int? {
+        guard let boxTeams = feed.liveData?.boxscore?.teams else { return nil }
         let playerKey = "ID\(pitcherId)"
         let homePlayer = boxTeams.home?.players?[playerKey]
         let awayPlayer = boxTeams.away?.players?[playerKey]
@@ -685,10 +688,6 @@ final class GameViewModel: ObservableObject {
         case .loading:
             return 12
         }
-    }
-
-    private func extractPostponedReason(from state: String) -> String {
-        state.replacingOccurrences(of: "Postponed", with: "").trimmingCharacters(in: .whitespaces)
     }
 
     private func currentSeason() -> Int {
@@ -739,6 +738,8 @@ extension PlayerResponse.PersonDetail {
     private func parseDate(_ s: String) -> Date? {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
+        // POSIX locale: API dates must not depend on the device's calendar setting
+        f.locale = Locale(identifier: "en_US_POSIX")
         return f.date(from: s)
     }
 }
