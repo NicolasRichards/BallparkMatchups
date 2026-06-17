@@ -68,6 +68,7 @@ final class GameViewModel: ObservableObject {
     private var lastTickState: TickState?
     private var consecutiveFailures = 0
     private var requestCount = 0
+    private var betweenInningsStart: Date?
 
     // In-memory caches
     private var playerCache: [Int: PlayerInfo] = [:]
@@ -274,6 +275,7 @@ final class GameViewModel: ObservableObject {
                     return feed.gameData.teams.home.abbreviation ?? feed.gameData.teams.home.name
                 }
             }()
+            if betweenInningsStart == nil { betweenInningsStart = Date() }
             uiState = .betweenInnings(BetweenInningsInfo(
                 inning: inning,
                 inningState: inningState,
@@ -282,6 +284,8 @@ final class GameViewModel: ObservableObject {
             ))
             return
         }
+
+        betweenInningsStart = nil  // new half-inning is underway
 
         // Build TickState
         guard let currentPlay = feed.liveData?.plays?.currentPlay else { return }
@@ -680,7 +684,13 @@ final class GameViewModel: ObservableObject {
         case .live:
             return 5
         case .betweenInnings:
-            return 5
+            // Wait ~2 minutes from when the inning ended, then switch to 5s
+            // so we catch the first pitch of the new half-inning quickly.
+            if let start = betweenInningsStart {
+                let remaining = 120 - Date().timeIntervalSince(start)
+                return remaining > 5 ? remaining : 5
+            }
+            return 120
         case .delay, .suspended:
             return 60
         case .final_, .postponed:
