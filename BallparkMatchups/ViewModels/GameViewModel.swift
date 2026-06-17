@@ -678,9 +678,9 @@ final class GameViewModel: ObservableObject {
             }
             return 300
         case .live:
-            return 12
+            return 5
         case .betweenInnings:
-            return 15
+            return 5
         case .delay, .suspended:
             return 60
         case .final_, .postponed:

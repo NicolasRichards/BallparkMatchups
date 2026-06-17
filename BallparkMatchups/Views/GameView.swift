@@ -50,9 +50,6 @@ struct GameView: View {
 
             Spacer()
 
-            if let updated = vm.lastUpdated {
-                LastUpdatedText(date: updated, status: vm.connectionStatus)
-            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
