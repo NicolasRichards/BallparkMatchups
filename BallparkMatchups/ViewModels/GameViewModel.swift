@@ -350,7 +350,8 @@ final class GameViewModel: ObservableObject {
                     batterSplits: card.batterSplits,
                     pitcherSplit: card.pitcherSplit,
                     batterGame: card.batterGame,
-                    pitcherGame: extractPitcherGame(playerId: newTick.pitcherId, feed: feed)
+                    pitcherGame: extractPitcherGame(playerId: newTick.pitcherId, feed: feed),
+                    lastEvent: card.lastEvent
                 ))
             }
 
@@ -429,7 +430,8 @@ final class GameViewModel: ObservableObject {
             batterSplits: newBatterSplits,
             pitcherSplit: newPitcherSplit,
             batterGame: existing.batterGame,
-            pitcherGame: extractPitcherGame(playerId: tick.pitcherId, feed: feed)
+            pitcherGame: extractPitcherGame(playerId: tick.pitcherId, feed: feed),
+            lastEvent: existing.lastEvent
         ))
     }
 
@@ -526,7 +528,8 @@ final class GameViewModel: ObservableObject {
             batterSplits: newBatterSplits,
             pitcherSplit: newPitcherSplit,
             batterGame: batterGame,
-            pitcherGame: pitcherGame
+            pitcherGame: pitcherGame,
+            lastEvent: extractLastEvent(feed: feed)
         ))
     }
 
@@ -663,6 +666,12 @@ final class GameViewModel: ObservableObject {
             strikeOuts: pitching.strikeOuts ?? 0,
             earnedRuns: pitching.earnedRuns ?? 0
         )
+    }
+
+    private func extractLastEvent(feed: LiveFeedResponse) -> String? {
+        feed.liveData?.plays?.allPlays?
+            .last(where: { $0.about?.isComplete == true })?
+            .result?.description
     }
 
     private func currentPitchCount(pitcherId: Int, in feed: LiveFeedResponse) -> Int? {

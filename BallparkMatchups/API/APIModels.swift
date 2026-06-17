@@ -151,6 +151,20 @@ struct LiveFeedResponse: Codable {
 
         struct Plays: Codable {
             let currentPlay: CurrentPlay?
+            let allPlays: [Play]?
+
+            struct Play: Codable {
+                let result: PlayResult?
+                let about: PlayAbout?
+
+                struct PlayResult: Codable {
+                    let description: String?
+                }
+
+                struct PlayAbout: Codable {
+                    let isComplete: Bool?
+                }
+            }
 
             struct CurrentPlay: Codable {
                 let atBatIndex: Int

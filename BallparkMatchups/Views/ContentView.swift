@@ -21,6 +21,9 @@ struct ContentView: View {
     @ViewBuilder
     private var content: some View {
         switch app.state {
+        case .loading:
+            LaunchSplashView()
+
         case .entry:
             EntryView()
                 .environmentObject(app)
@@ -57,6 +60,22 @@ struct ContentView: View {
 }
 
 // MARK: - Utility Loading Views
+
+struct LaunchSplashView: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("BALLPARK\nMATCHUPS")
+                .font(.system(size: 34, weight: .black))
+                .foregroundColor(Theme.primaryText)
+                .lineSpacing(4)
+            ProgressView()
+                .tint(Theme.secondaryText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 24)
+        .padding(.top, 100)
+    }
+}
 
 struct LocatingView: View {
     var body: some View {

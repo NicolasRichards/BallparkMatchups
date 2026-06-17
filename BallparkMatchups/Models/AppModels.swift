@@ -198,6 +198,7 @@ struct MatchupCard {
     let pitcherSplit: SplitLine?    // single pitcher split, distinct sitCode from batter splits
     let batterGame: BatterGameLine?
     let pitcherGame: PitcherGameLine?
+    let lastEvent: String?          // result.description of the last completed at-bat
 }
 
 // MARK: - Polling Diff
@@ -311,6 +312,7 @@ enum ConnectionStatus {
 // MARK: - App UI State
 
 enum AppState {
+    case loading            // brief splash while venue cache + session restore runs
     case entry
     case locating
     case browseGames

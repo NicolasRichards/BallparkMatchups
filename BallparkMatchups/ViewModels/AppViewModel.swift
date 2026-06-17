@@ -5,7 +5,7 @@ import Combine
 
 @MainActor
 final class AppViewModel: ObservableObject {
-    @Published var state: AppState = .entry
+    @Published var state: AppState = .loading
     @Published var gameVM: GameViewModel?
     @Published var browseGames: [GameSummary] = []
     @Published var browseLoading = false
@@ -27,6 +27,8 @@ final class AppViewModel: ObservableObject {
         await venueCache.load()
         Task { await venueCache.reloadIfNeeded() }  // background, don't block launch
         await restoreSessionIfValid()
+        // If session restore didn't change the state, show the entry screen.
+        if case .loading = state { state = .entry }
     }
 
     // MARK: - Detect Location
