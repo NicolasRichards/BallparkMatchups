@@ -130,15 +130,16 @@ extension CachedVenue {
 
     func todayDateString() -> String {
         // Roll over at 3am ET, not local midnight, so late games stay findable.
+        let etZone = TimeZone(identifier: "America/New_York") ?? .current
         var etCal = Calendar(identifier: .gregorian)
-        etCal.timeZone = TimeZone(identifier: "America/New_York")!
+        etCal.timeZone = etZone
         let hourET = etCal.component(.hour, from: Date())
         let base = hourET < 3
             ? etCal.date(byAdding: .day, value: -1, to: Date()) ?? Date()
             : Date()
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone(identifier: "America/New_York")!
+        formatter.timeZone = etZone
         // POSIX locale: API dates must not depend on the device's calendar setting
         formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter.string(from: base)

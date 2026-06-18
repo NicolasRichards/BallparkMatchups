@@ -138,7 +138,7 @@ final class AppViewModel: ObservableObject {
         let age = Date().timeIntervalSince(session.resolvedAt)
         guard age < 6 * 3600 else { clearSession(); return }
         if let last = session.lastKnownState,
-           ["Final", "Game Over", "Completed Early", "Postponed"].contains(last) {
+           ["Final", "Game Over", "Completed Early", "Postponed", "Suspended"].contains(last) {
             clearSession(); return
         }
         let venueName: String
@@ -181,7 +181,7 @@ final class AppViewModel: ObservableObject {
     }
 
     private func isFinal(_ state: String) -> Bool {
-        ["Final", "Game Over", "Completed Early"].contains(state)
+        ["Final", "Game Over", "Completed Early", "Suspended"].contains(state)
     }
 
     // MARK: - Next Home Game
@@ -240,15 +240,16 @@ final class AppViewModel: ObservableObject {
     private func todayDateString() -> String {
         // Baseball day rolls over at 3am ET so late West Coast games
         // remain visible after local midnight.
+        let etZone = TimeZone(identifier: "America/New_York") ?? .current
         var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "America/New_York")!
+        cal.timeZone = etZone
         let hourET = cal.component(.hour, from: Date())
         let base = hourET < 3
             ? cal.date(byAdding: .day, value: -1, to: Date()) ?? Date()
             : Date()
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = TimeZone(identifier: "America/New_York")!
+        f.timeZone = etZone
         // POSIX locale: API dates must not depend on the device's calendar setting
         f.locale = Locale(identifier: "en_US_POSIX")
         return f.string(from: base)
