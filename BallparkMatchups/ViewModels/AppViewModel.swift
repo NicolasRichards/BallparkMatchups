@@ -24,8 +24,10 @@ final class AppViewModel: ObservableObject {
     // MARK: - Boot
 
     func onAppear() async {
-        await venueCache.load()
-        Task { await venueCache.reloadIfNeeded() }  // background, don't block launch
+        // Load venue cache in background — entry screen doesn't need it.
+        // It will be ready long before the user taps "Detect location."
+        Task { await venueCache.load() }
+        Task { await venueCache.reloadIfNeeded() }
         await restoreSessionIfValid()
         // If session restore didn't change the state, show the entry screen.
         if case .loading = state { state = .entry }
