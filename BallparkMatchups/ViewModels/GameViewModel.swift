@@ -618,6 +618,7 @@ final class GameViewModel: ObservableObject {
     ) -> (batterSplits: [SplitLine], pitcherSplit: SplitLine?, candidateCount: Int) {
         let isReliever = (pitcherFirstAtBat[tick.pitcherId].map { $0 > 0 }) ?? false
         let pitcherHand = playerCache[tick.pitcherId]?.pitchHand
+        let batterHand = playerCache[tick.batterId]?.batSide
 
         let batter3 = SplitPriorityEngine.selectBatterSplits(
             tickState: tick,
@@ -627,16 +628,20 @@ final class GameViewModel: ObservableObject {
             maxCount: 3
         )
 
-        // Omit pitcher split if it shares a sitCode with a batter split already shown
+        // Handedness sitCodes (vl/vr) mean different things for batters vs pitchers
+        // so they are never truly redundant and should not be deduplicated.
+        let handednessCodes: Set<String> = ["vl", "vr"]
         let pitcherSplit: SplitLine? = SplitPriorityEngine.selectPitcherSplit(
             tickState: tick,
             splits: pitcherSplits,
             currentPitchCount: pitchCount,
             isReliever: isReliever,
             isFirstBatter: isFirstBatter,
-            careerOPS: nil
+            careerOPS: nil,
+            batterHand: batterHand
         ).flatMap { card in
-            batter3.contains(where: { $0.sitCode == card.sitCode }) ? nil : card
+            if handednessCodes.contains(card.sitCode) { return card }
+            return batter3.contains(where: { $0.sitCode == card.sitCode }) ? nil : card
         }
 
         return (batter3, pitcherSplit, batterSplits.count + pitcherSplits.count)

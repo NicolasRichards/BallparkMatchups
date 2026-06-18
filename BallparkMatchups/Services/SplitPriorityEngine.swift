@@ -97,7 +97,8 @@ struct SplitPriorityEngine {
         currentPitchCount: Int?,
         isReliever: Bool,
         isFirstBatter: Bool,
-        careerOPS: Double?
+        careerOPS: Double?,
+        batterHand: Handedness?
     ) -> SplitLine? {
         let runners = RunnersState.from(
             onFirst: tickState.runnersCode.contains("1"),
@@ -129,8 +130,12 @@ struct SplitPriorityEngine {
         if runners.hasScoringPosition, let s = best("risp") { return s }
         if isLate, let s = best("lc") { return s }
 
-        // Handedness fallback
-        if let s = best("vl") ?? best("vr") { return s }
+        // Handedness fallback — match the current batter's hand
+        switch batterHand {
+        case .left:                  if let s = best("vl") ?? best("vr") { return s }
+        case .right, .switchHitter:  if let s = best("vr") ?? best("vl") { return s }
+        case nil:                    if let s = best("vr") ?? best("vl") { return s }
+        }
 
         return nil
     }
