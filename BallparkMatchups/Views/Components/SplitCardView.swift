@@ -54,7 +54,7 @@ struct BatterSplitsGroupView: View {
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Text("\(split.avg) / \(split.obp) / \(split.slg)")
                     .font(.system(size: 18, weight: .bold, design: .monospaced))
-                    .foregroundColor(Theme.primaryText)
+                    .foregroundColor(Color(hex: "#E8B84B"))
                     .monospacedDigit()
 
                 Spacer()
