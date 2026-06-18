@@ -68,35 +68,50 @@ struct BatterSplitsGroupView: View {
     }
 }
 
-// MARK: - Standalone pitcher split card (unchanged style)
+// MARK: - Pitcher split card (matches batter splits style)
 
 struct SplitCardView: View {
     let split: SplitLine
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(spacing: 0) {
             HStack {
-                Text(split.label.uppercased())
-                    .labelFont(size: 11)
+                Text("PITCHER SPLITS")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(Theme.secondaryText)
                     .kerning(1.2)
                 Spacer()
                 Text(split.scope)
-                    .labelFont(size: 11)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Theme.secondaryText)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
 
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text("\(split.avg) / \(split.obp) / \(split.slg)")
-                    .font(.system(size: 18, weight: .bold, design: .monospaced))
-                    .foregroundColor(Theme.primaryText)
-                    .monospacedDigit()
+            Divider().background(Color(hex: "#2A3A2A"))
 
-                Spacer()
+            VStack(alignment: .leading, spacing: 5) {
+                Text(split.label.uppercased())
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(Theme.secondaryText)
+                    .kerning(1.2)
 
-                Text("(\(split.pa) PA)")
-                    .labelFont(size: 12)
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    Text("\(split.avg) / \(split.obp) / \(split.slg)")
+                        .font(.system(size: 18, weight: .bold, design: .monospaced))
+                        .foregroundColor(Theme.primaryText)
+                        .monospacedDigit()
+
+                    Spacer()
+
+                    Text("(\(split.pa) PA)")
+                        .labelFont(size: 12)
+                }
             }
-
-            Divider().background(Color(hex: "#222222"))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
         }
+        .background(Theme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
