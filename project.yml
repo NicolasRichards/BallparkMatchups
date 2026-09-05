@@ -28,7 +28,12 @@ targets:
       path: BallparkMatchups/Info.plist
       properties:
         CFBundleDisplayName: BallparkMatchups
-        CFBundleIdentifier: com.nick.BallparkMatchups
+        CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)"
+        # These must be substitutions, not literals. Without them XcodeGen writes
+        # its defaults of 1.0 and 1, which silently ships a version lower than
+        # what is already live.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSLocationWhenInUseUsageDescription: "To detect which ballpark you're at and show the current matchup."
         UILaunchScreen: {}
         UIApplicationSceneManifest:
@@ -42,6 +47,10 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
+          NSExceptionDomains:
+            statsapi.mlb.com:
+              NSExceptionAllowsInsecureHTTPLoads: false
+              NSIncludesSubdomains: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nick.BallparkMatchups
