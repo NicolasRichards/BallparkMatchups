@@ -6,78 +6,36 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		01B0E32FD5B239E420108D9B /* MLBAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 538480EC54D3F7604ADEF19E /* MLBAPIClient.swift */; };
-		11D239F03A1B8F0D929B29C8 /* PreGameCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20293491AFCCC2CB8C5C8AA8 /* PreGameCardView.swift */; };
-		1707B4D92C8A2DCE6BB168AA /* FinalCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675727CB33C1DE963F47A1F4 /* FinalCardView.swift */; };
-		2AB92291E646822FF072A187 /* LiveCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 780D5CEDD0FD9311458C92DA /* LiveCardView.swift */; };
-		2D02E932A4AA9912AF27E0A7 /* BallparkMatchupsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B611571064DB2AFA7F69532 /* BallparkMatchupsApp.swift */; };
-		38DAA89944F62757E0CF974E /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BCEE9C7E87226140C9A71AC /* AppViewModel.swift */; };
-		39A33A9002B9710022380A98 /* EntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02F6674421E937B68A2B2863 /* EntryView.swift */; };
-		3B6809A8CCE88F3E36689C1B /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331245800144430A3D0A1814 /* AppModels.swift */; };
-		401EE896497D29DB76A28470 /* DebugOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DC514BCF42BE9447B9D3130 /* DebugOverlayView.swift */; };
-		42618BB4A200DAA1EC30A030 /* SituationStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB6C650FA6761131C96EF1CA /* SituationStripView.swift */; };
-		46AB71BAFF4859D51A03EE52 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 378E8648519A26A882B7537A /* Theme.swift */; };
-		47DE98CF93121EB2A28EA90D /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DC2A7F390611937EAF60024 /* LocationService.swift */; };
-		4CBD82C3DC6197D224A7A352 /* MatchupBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8358E2BCC148636A5056CED /* MatchupBlockView.swift */; };
-		4DD6948AFBBFB72365B8E28A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A50F549FD6ACECB33385E9F3 /* Assets.xcassets */; };
-		6331DB0F9681BCE02790DEE8 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59F46D4FAACD6B49BE6EF200 /* ContentView.swift */; };
-		65E0F42FA5BB63FEA1496E84 /* BrowseGamesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A539743B5F6DE41976D879BE /* BrowseGamesView.swift */; };
-		6C2E027FFFFE15C7B6F76DE6 /* DelayCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D701DE5E7861E797B894DECC /* DelayCardView.swift */; };
-		707090B9C0B3D358D537C189 /* GameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00777CAA38551AD39DE88B2B /* GameView.swift */; };
-		70CBFE934C787A904EAC8603 /* BetweenInningsCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC4BC87AF537DA33F0F36C7 /* BetweenInningsCardView.swift */; };
-		72B95B5573C8152B8042FDC3 /* BvPCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E351631C66E46B64290CD03 /* BvPCardView.swift */; };
-		A5EB228C44839FD25548B144 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE2BE9F9D93CE00439B58BB /* APIModels.swift */; };
-		AD740B65D69623AAEF05FCD6 /* SplitCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B636FBB9D227E2107524AAF8 /* SplitCardView.swift */; };
-		D9F7856316566003FCA18E70 /* GameViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1E215110F30E4E11ED12B78 /* GameViewModel.swift */; };
-		E1E11CE6E271E368FA083303 /* SplitPriorityEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C72F2E909E8F361516EF006 /* SplitPriorityEngine.swift */; };
-		F29C0FE9D82463FCD342B2EC /* VenueCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E67E657E84EC29647623C7A /* VenueCache.swift */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXFileReference section */
-		00777CAA38551AD39DE88B2B /* GameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameView.swift; sourceTree = "<group>"; };
-		02F6674421E937B68A2B2863 /* EntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryView.swift; sourceTree = "<group>"; };
-		0B611571064DB2AFA7F69532 /* BallparkMatchupsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BallparkMatchupsApp.swift; sourceTree = "<group>"; };
-		1BCEE9C7E87226140C9A71AC /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
-		1DC514BCF42BE9447B9D3130 /* DebugOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugOverlayView.swift; sourceTree = "<group>"; };
-		20293491AFCCC2CB8C5C8AA8 /* PreGameCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreGameCardView.swift; sourceTree = "<group>"; };
-		2C72F2E909E8F361516EF006 /* SplitPriorityEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitPriorityEngine.swift; sourceTree = "<group>"; };
-		331245800144430A3D0A1814 /* AppModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
-		378E8648519A26A882B7537A /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
-		3E351631C66E46B64290CD03 /* BvPCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BvPCardView.swift; sourceTree = "<group>"; };
 		424130D9D75AEA331543E1EC /* BallparkMatchups.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BallparkMatchups.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		4BE2BE9F9D93CE00439B58BB /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
-		4DC2A7F390611937EAF60024 /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
-		538480EC54D3F7604ADEF19E /* MLBAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLBAPIClient.swift; sourceTree = "<group>"; };
-		59F46D4FAACD6B49BE6EF200 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		675727CB33C1DE963F47A1F4 /* FinalCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinalCardView.swift; sourceTree = "<group>"; };
-		780D5CEDD0FD9311458C92DA /* LiveCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCardView.swift; sourceTree = "<group>"; };
-		8B354063987B9745A72C6F51 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		8E67E657E84EC29647623C7A /* VenueCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VenueCache.swift; sourceTree = "<group>"; };
-		A50F549FD6ACECB33385E9F3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		A539743B5F6DE41976D879BE /* BrowseGamesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseGamesView.swift; sourceTree = "<group>"; };
-		B636FBB9D227E2107524AAF8 /* SplitCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitCardView.swift; sourceTree = "<group>"; };
-		BDC4BC87AF537DA33F0F36C7 /* BetweenInningsCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BetweenInningsCardView.swift; sourceTree = "<group>"; };
-		C1E215110F30E4E11ED12B78 /* GameViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameViewModel.swift; sourceTree = "<group>"; };
-		D701DE5E7861E797B894DECC /* DelayCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DelayCardView.swift; sourceTree = "<group>"; };
-		F8358E2BCC148636A5056CED /* MatchupBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchupBlockView.swift; sourceTree = "<group>"; };
-		FB6C650FA6761131C96EF1CA /* SituationStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SituationStripView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
-/* Begin PBXGroup section */
-		05E391C70BEEE5741B15C9C6 /* API */ = {
-			isa = PBXGroup;
-			children = (
-				4BE2BE9F9D93CE00439B58BB /* APIModels.swift */,
-				538480EC54D3F7604ADEF19E /* MLBAPIClient.swift */,
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0BA11FA000000000000000A2 /* Exceptions for "BallparkMatchups" folder in "BallparkMatchups" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
 			);
-			path = API;
+			target = 818050E9C6CAC6E723AFDF0F /* BallparkMatchups */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		0BA11FA000000000000000A1 /* BallparkMatchups */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0BA11FA000000000000000A2 /* Exceptions for "BallparkMatchups" folder in "BallparkMatchups" target */,
+			);
+			path = BallparkMatchups;
 			sourceTree = "<group>";
 		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXGroup section */
 		0B1864FFEC148D00F3A8DFDF = {
 			isa = PBXGroup;
 			children = (
-				6BC05D2636F49A0F240BEAF4 /* BallparkMatchups */,
+				0BA11FA000000000000000A1 /* BallparkMatchups */,
 				36CF505A40DCCDF53431DA43 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,94 +46,6 @@
 				424130D9D75AEA331543E1EC /* BallparkMatchups.app */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		6BC05D2636F49A0F240BEAF4 /* BallparkMatchups */ = {
-			isa = PBXGroup;
-			children = (
-				05E391C70BEEE5741B15C9C6 /* API */,
-				75C6CC5DBE2B9C53FCB7177A /* Models */,
-				CE32E1E6D8136B9B8071039B /* Services */,
-				E26B0670223469F6ADA2B66C /* ViewModels */,
-				7AE102716A67350E9262EBDF /* Views */,
-				A50F549FD6ACECB33385E9F3 /* Assets.xcassets */,
-				0B611571064DB2AFA7F69532 /* BallparkMatchupsApp.swift */,
-				8B354063987B9745A72C6F51 /* Info.plist */,
-			);
-			path = BallparkMatchups;
-			sourceTree = "<group>";
-		};
-		75BCD42C418E61D227C2ED48 /* Entry */ = {
-			isa = PBXGroup;
-			children = (
-				A539743B5F6DE41976D879BE /* BrowseGamesView.swift */,
-				02F6674421E937B68A2B2863 /* EntryView.swift */,
-			);
-			path = Entry;
-			sourceTree = "<group>";
-		};
-		75C6CC5DBE2B9C53FCB7177A /* Models */ = {
-			isa = PBXGroup;
-			children = (
-				331245800144430A3D0A1814 /* AppModels.swift */,
-			);
-			path = Models;
-			sourceTree = "<group>";
-		};
-		7AE102716A67350E9262EBDF /* Views */ = {
-			isa = PBXGroup;
-			children = (
-				C95957FE3AA1D5DE89AA0595 /* Cards */,
-				B27C7D4C4E24E830DF124CAE /* Components */,
-				75BCD42C418E61D227C2ED48 /* Entry */,
-				59F46D4FAACD6B49BE6EF200 /* ContentView.swift */,
-				00777CAA38551AD39DE88B2B /* GameView.swift */,
-				378E8648519A26A882B7537A /* Theme.swift */,
-			);
-			path = Views;
-			sourceTree = "<group>";
-		};
-		B27C7D4C4E24E830DF124CAE /* Components */ = {
-			isa = PBXGroup;
-			children = (
-				3E351631C66E46B64290CD03 /* BvPCardView.swift */,
-				1DC514BCF42BE9447B9D3130 /* DebugOverlayView.swift */,
-				F8358E2BCC148636A5056CED /* MatchupBlockView.swift */,
-				FB6C650FA6761131C96EF1CA /* SituationStripView.swift */,
-				B636FBB9D227E2107524AAF8 /* SplitCardView.swift */,
-			);
-			path = Components;
-			sourceTree = "<group>";
-		};
-		C95957FE3AA1D5DE89AA0595 /* Cards */ = {
-			isa = PBXGroup;
-			children = (
-				BDC4BC87AF537DA33F0F36C7 /* BetweenInningsCardView.swift */,
-				D701DE5E7861E797B894DECC /* DelayCardView.swift */,
-				675727CB33C1DE963F47A1F4 /* FinalCardView.swift */,
-				780D5CEDD0FD9311458C92DA /* LiveCardView.swift */,
-				20293491AFCCC2CB8C5C8AA8 /* PreGameCardView.swift */,
-			);
-			path = Cards;
-			sourceTree = "<group>";
-		};
-		CE32E1E6D8136B9B8071039B /* Services */ = {
-			isa = PBXGroup;
-			children = (
-				4DC2A7F390611937EAF60024 /* LocationService.swift */,
-				2C72F2E909E8F361516EF006 /* SplitPriorityEngine.swift */,
-				8E67E657E84EC29647623C7A /* VenueCache.swift */,
-			);
-			path = Services;
-			sourceTree = "<group>";
-		};
-		E26B0670223469F6ADA2B66C /* ViewModels */ = {
-			isa = PBXGroup;
-			children = (
-				1BCEE9C7E87226140C9A71AC /* AppViewModel.swift */,
-				C1E215110F30E4E11ED12B78 /* GameViewModel.swift */,
-			);
-			path = ViewModels;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -192,6 +62,9 @@
 			);
 			dependencies = (
 			);
+			fileSystemSynchronizedGroups = (
+				0BA11FA000000000000000A1 /* BallparkMatchups */,
+			);
 			name = BallparkMatchups;
 			packageProductDependencies = (
 			);
@@ -206,7 +79,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 2660;
 				TargetAttributes = {
 					818050E9C6CAC6E723AFDF0F = {
 						DevelopmentTeam = 8VKMPP3AW2;
@@ -237,7 +110,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4DD6948AFBBFB72365B8E28A /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -248,30 +120,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A5EB228C44839FD25548B144 /* APIModels.swift in Sources */,
-				3B6809A8CCE88F3E36689C1B /* AppModels.swift in Sources */,
-				38DAA89944F62757E0CF974E /* AppViewModel.swift in Sources */,
-				2D02E932A4AA9912AF27E0A7 /* BallparkMatchupsApp.swift in Sources */,
-				70CBFE934C787A904EAC8603 /* BetweenInningsCardView.swift in Sources */,
-				65E0F42FA5BB63FEA1496E84 /* BrowseGamesView.swift in Sources */,
-				72B95B5573C8152B8042FDC3 /* BvPCardView.swift in Sources */,
-				6331DB0F9681BCE02790DEE8 /* ContentView.swift in Sources */,
-				401EE896497D29DB76A28470 /* DebugOverlayView.swift in Sources */,
-				6C2E027FFFFE15C7B6F76DE6 /* DelayCardView.swift in Sources */,
-				39A33A9002B9710022380A98 /* EntryView.swift in Sources */,
-				1707B4D92C8A2DCE6BB168AA /* FinalCardView.swift in Sources */,
-				707090B9C0B3D358D537C189 /* GameView.swift in Sources */,
-				D9F7856316566003FCA18E70 /* GameViewModel.swift in Sources */,
-				2AB92291E646822FF072A187 /* LiveCardView.swift in Sources */,
-				47DE98CF93121EB2A28EA90D /* LocationService.swift in Sources */,
-				01B0E32FD5B239E420108D9B /* MLBAPIClient.swift in Sources */,
-				4CBD82C3DC6197D224A7A352 /* MatchupBlockView.swift in Sources */,
-				11D239F03A1B8F0D929B29C8 /* PreGameCardView.swift in Sources */,
-				42618BB4A200DAA1EC30A030 /* SituationStripView.swift in Sources */,
-				AD740B65D69623AAEF05FCD6 /* SplitCardView.swift in Sources */,
-				E1E11CE6E271E368FA083303 /* SplitPriorityEngine.swift in Sources */,
-				46AB71BAFF4859D51A03EE52 /* Theme.swift in Sources */,
-				F29C0FE9D82463FCD342B2EC /* VenueCache.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
