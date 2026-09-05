@@ -129,9 +129,7 @@ struct EntryView: View {
     }
 
     private func formatDate(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "EEEE, MMM d 'at' h:mm a"
-        return f.string(from: date)
+        date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day().hour().minute())
     }
 }
 

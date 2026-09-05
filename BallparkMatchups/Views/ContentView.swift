@@ -2,11 +2,19 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var app = AppViewModel()
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    /// Every screen is one narrow column of cards. Unbounded it spans the full
+    /// width of an iPad, so cap it and let the ZStack centre it.
+    private var contentMaxWidth: CGFloat {
+        horizontalSizeClass == .regular ? 700 : .infinity
+    }
 
     var body: some View {
         ZStack {
             Theme.background.ignoresSafeArea()
             content
+                .frame(maxWidth: contentMaxWidth)
         }
         .preferredColorScheme(.dark)
         .task { await app.onAppear() }

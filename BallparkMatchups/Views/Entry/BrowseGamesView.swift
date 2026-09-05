@@ -211,8 +211,8 @@ struct GameRow: View {
     }
 
     private func formatTime(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "h:mm a"
-        return f.string(from: date)
+        // Locale-aware: a fixed "h:mm a" pattern shows 12-hour times to users
+        // whose region uses a 24-hour clock.
+        date.formatted(date: .omitted, time: .shortened)
     }
 }

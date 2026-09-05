@@ -75,6 +75,7 @@ final class GameViewModel: ObservableObject {
     private var careerSplitCache: [CacheKey: [SplitLine]] = [:]
     private var careerBvPCache: [BvPKey: BvPLine?] = [:]
     private var pitcherFirstAtBat: [Int: Int] = [:]  // pitcherId -> first atBatIndex
+    private var observedPitcherEntry: Set<Int> = []  // pitchers we saw enter this session
 
     private let api = MLBAPIClient.shared
 
@@ -323,11 +324,15 @@ final class GameViewModel: ObservableObject {
 
         if refreshKind == .none && lastTickState != nil { return }
 
-        // Track reliever first-batter
+        // Track reliever first-batter. A pitcher already on the mound when the app
+        // opened has no known entry point, so his first observed at-bat is not his
+        // first batter faced — only count entries we actually watched happen.
         if pitcherFirstAtBat[pitcherId] == nil {
             pitcherFirstAtBat[pitcherId] = currentPlay.atBatIndex
+            if lastTickState != nil { observedPitcherEntry.insert(pitcherId) }
         }
-        let isFirstBatter = pitcherFirstAtBat[pitcherId] == currentPlay.atBatIndex
+        let isFirstBatter = observedPitcherEntry.contains(pitcherId)
+            && pitcherFirstAtBat[pitcherId] == currentPlay.atBatIndex
 
         // Fetch data based on refresh kind
         switch refreshKind {
@@ -417,6 +422,7 @@ final class GameViewModel: ObservableObject {
             pitcherSplits: allPitcherSplits,
             pitchCount: pitchCount,
             isFirstBatter: isFirstBatter,
+            isReliever: pitcherIsReliever(id: tick.pitcherId, in: feed),
             careerOPS: careerOPS
         )
         debugInfo.candidateSplits = candidateCount
@@ -512,6 +518,7 @@ final class GameViewModel: ObservableObject {
             pitcherSplits: allPitcherSplits,
             pitchCount: pitchCount,
             isFirstBatter: isFirstBatter,
+            isReliever: pitcherIsReliever(id: tick.pitcherId, in: feed),
             careerOPS: bvp?.ops
         )
         debugInfo.candidateSplits = candidateCount
@@ -614,9 +621,9 @@ final class GameViewModel: ObservableObject {
         pitcherSplits: [SplitLine],
         pitchCount: Int?,
         isFirstBatter: Bool,
+        isReliever: Bool,
         careerOPS: Double?
     ) -> (batterSplits: [SplitLine], pitcherSplit: SplitLine?, candidateCount: Int) {
-        let isReliever = (pitcherFirstAtBat[tick.pitcherId].map { $0 > 0 }) ?? false
         let pitcherHand = playerCache[tick.pitcherId]?.pitchHand
         let batterHand = playerCache[tick.batterId]?.batSide
 
@@ -645,6 +652,22 @@ final class GameViewModel: ObservableObject {
         }
 
         return (batter3, pitcherSplit, batterSplits.count + pitcherSplits.count)
+    }
+
+    /// True when this pitcher is not his team's starter.
+    ///
+    /// The boxscore lists each team's pitchers in the order they appeared, so the
+    /// first entry is the starter. The previous rule asked whether the pitcher's
+    /// first observed at-bat index was above zero, which marked the home starter a
+    /// reliever every game (his first at-bat is never index 0) and marked any
+    /// starter a reliever when the app opened mid-game.
+    private func pitcherIsReliever(id: Int, in feed: LiveFeedResponse) -> Bool {
+        guard let teams = feed.liveData?.boxscore?.teams else { return false }
+        for side in [teams.home, teams.away] {
+            guard let list = side?.pitchers, let index = list.firstIndex(of: id) else { continue }
+            return index > 0
+        }
+        return false
     }
 
     private func extractBatterGame(playerId: Int, feed: LiveFeedResponse) -> BatterGameLine? {

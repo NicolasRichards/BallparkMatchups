@@ -14,6 +14,7 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
 
     private let manager = CLLocationManager()
     private var continuation: CheckedContinuation<LocationResult, Never>?
+    private var authContinuation: CheckedContinuation<CLAuthorizationStatus, Never>?
     private var timeoutTask: Task<Void, Never>?
 
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
@@ -77,8 +78,12 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
         Task { @MainActor in
-            self.authorizationStatus = manager.authorizationStatus
+            self.authorizationStatus = status
+            guard status != .notDetermined, let pending = self.authContinuation else { return }
+            self.authContinuation = nil
+            pending.resume(returning: status)
         }
     }
 
@@ -93,16 +98,22 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
+    /// Waits for the delegate to report the user's choice.
+    ///
+    /// This used to poll every 200ms and give up after 6 seconds, so a slow tap on
+    /// Allow produced "Couldn't detect location". The system prompt is modal, so
+    /// waiting for the real answer costs nothing.
     private func waitForAuthorization() async -> CLAuthorizationStatus {
-        await withCheckedContinuation { cont in
-            var attempts = 0
-            Task {
-                while manager.authorizationStatus == .notDetermined && attempts < 30 {
-                    try? await Task.sleep(nanoseconds: 200_000_000)
-                    attempts += 1
-                }
-                cont.resume(returning: self.manager.authorizationStatus)
-            }
+        // The user may have answered between requesting and awaiting.
+        let current = manager.authorizationStatus
+        if current != .notDetermined { return current }
+
+        if let stale = authContinuation {
+            authContinuation = nil
+            stale.resume(returning: current)
+        }
+        return await withCheckedContinuation { cont in
+            authContinuation = cont
         }
     }
 }

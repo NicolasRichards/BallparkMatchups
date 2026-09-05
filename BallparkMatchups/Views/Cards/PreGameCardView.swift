@@ -72,9 +72,6 @@ struct PreGameCardView: View {
     }
 
     private func formatTime(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "h:mm a"
-        f.timeZone = .current
-        return f.string(from: date)
+        date.formatted(date: .omitted, time: .shortened)
     }
 }
