@@ -16,6 +16,7 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
     private var continuation: CheckedContinuation<LocationResult, Never>?
     private var authContinuation: CheckedContinuation<CLAuthorizationStatus, Never>?
     private var timeoutTask: Task<Void, Never>?
+    private var authTimeoutTask: Task<Void, Never>?
 
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
 
@@ -82,6 +83,7 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
         Task { @MainActor in
             self.authorizationStatus = status
             guard status != .notDetermined, let pending = self.authContinuation else { return }
+            self.authTimeoutTask?.cancel()
             self.authContinuation = nil
             pending.resume(returning: status)
         }
@@ -112,6 +114,19 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
             authContinuation = nil
             stale.resume(returning: current)
         }
+
+        // Backstop. LocatingView has no cancel button, so if the delegate never
+        // fires (the app is backgrounded at the prompt, say) the UI would sit on
+        // "Detecting location…" forever. Long enough that a slow tap on Allow is
+        // never cut short, which was the bug this method was written to fix.
+        authTimeoutTask?.cancel()
+        authTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 60_000_000_000)
+            guard !Task.isCancelled, let self, let pending = self.authContinuation else { return }
+            self.authContinuation = nil
+            pending.resume(returning: self.manager.authorizationStatus)
+        }
+
         return await withCheckedContinuation { cont in
             authContinuation = cont
         }
