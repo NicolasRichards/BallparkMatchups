@@ -1,0 +1,62 @@
+{
+  "identifier": "70E1034A-8236-433D-BD37-95946E915E7B",
+  "nonRenewingSubscriptions": [],
+  "products": [
+    {
+      "displayPrice": "1.99",
+      "familyShareable": false,
+      "internalID": "B278BD15-F2D4-4FEC-87DC-6511C291B7B9",
+      "localizations": [
+        {
+          "description": "A small thank-you for a free app.",
+          "displayName": "Small Tip",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.nick.BallparkMatchups.tip.small",
+      "referenceName": "Small Tip",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "3.99",
+      "familyShareable": false,
+      "internalID": "ECAF8F4E-6EA0-49BC-966E-DF47D157358F",
+      "localizations": [
+        {
+          "description": "A generous thank-you for a free app.",
+          "displayName": "Medium Tip",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.nick.BallparkMatchups.tip.medium",
+      "referenceName": "Medium Tip",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "4.99",
+      "familyShareable": false,
+      "internalID": "A1BCD6EE-7A20-4ABC-917B-31CBAF3CFFEB",
+      "localizations": [
+        {
+          "description": "A very generous thank-you for a free app.",
+          "displayName": "Large Tip",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.nick.BallparkMatchups.tip.large",
+      "referenceName": "Large Tip",
+      "type": "Consumable"
+    }
+  ],
+  "settings": {
+    "_failTransactionsEnabled": false,
+    "_locale": "en_US",
+    "_storefront": "USA",
+    "_storeKitErrors": []
+  },
+  "subscriptionGroups": [],
+  "version": {
+    "major": 3,
+    "minor": 0
+  }
+}

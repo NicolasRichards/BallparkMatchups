@@ -2,6 +2,7 @@ import SwiftUI
 
 struct EntryView: View {
     @EnvironmentObject private var app: AppViewModel
+    @State private var showingAbout = false
 
     var body: some View {
         ScrollView {
@@ -29,19 +30,33 @@ struct EntryView: View {
                 Spacer(minLength: 60)
             }
         }
+        .sheet(isPresented: $showingAbout) {
+            AboutView()
+        }
     }
 
     // MARK: - Header
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("BALLPARK\nMATCHUPS")
-                .font(.system(size: 34, weight: .black, design: .default))
-                .foregroundColor(Theme.primaryText)
-                .lineSpacing(4)
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("BALLPARK\nMATCHUPS")
+                    .font(.system(size: 34, weight: .black, design: .default))
+                    .foregroundColor(Theme.primaryText)
+                    .lineSpacing(4)
 
-            Text("Live batter vs. pitcher data.")
-                .labelFont(size: 15)
+                Text("Live batter vs. pitcher data.")
+                    .labelFont(size: 15)
+            }
+
+            Spacer()
+
+            Button { showingAbout = true } label: {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 22))
+                    .foregroundColor(Theme.secondaryText)
+            }
+            .accessibilityLabel("About")
         }
     }
 
