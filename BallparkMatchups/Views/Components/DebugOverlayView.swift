@@ -2,6 +2,9 @@ import SwiftUI
 
 struct DebugOverlayView: View {
     let info: GameViewModel.DebugInfo
+    /// Flipping the flag needs a fresh game session to take effect, so this
+    /// reports the stored value rather than the one the running view model read.
+    @State private var pushFlag = FeatureFlags.pushFeedEnabled
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -15,6 +18,31 @@ struct DebugOverlayView: View {
             row("Candidates", "\(info.candidateSplits)")
             row("Shown splits", "\(info.shownSplits)")
             row("Last refresh", info.lastRefreshKind)
+
+            Divider()
+                .overlay(Color.green.opacity(0.4))
+                .padding(.vertical, 2)
+
+            Button {
+                pushFlag.toggle()
+                FeatureFlags.pushFeedEnabled = pushFlag
+            } label: {
+                row("Push feed", pushFlag ? "ON (reopen game)" : "off — tap")
+            }
+            .buttonStyle(.plain)
+
+            if let push = info.push {
+                row("Push active", info.pushEnabled ? "yes" : "no")
+                row("Socket", push.isConnected ? "connected" : "down")
+                row("Patched", "\(push.updatesApplied)")
+                row("Full refresh", "\(push.fullRefreshes)")
+                row("Patch fails", "\(push.patchFailures)")
+                row("Push KB", "\(push.bytesOverPush / 1024)")
+                row("Poll KB est", "\(push.estimatedPollingBytes / 1024)")
+                if let err = push.lastError {
+                    row("Last error", String(err.prefix(24)))
+                }
+            }
         }
         .padding(12)
         .background(Color.black.opacity(0.85))
@@ -22,7 +50,7 @@ struct DebugOverlayView: View {
             Rectangle()
                 .stroke(Color.green.opacity(0.5), lineWidth: 1)
         )
-        .frame(maxWidth: 220, alignment: .leading)
+        .frame(maxWidth: 240, alignment: .leading)
         .padding(.top, 110)
         .padding(.trailing, 16)
         .frame(maxWidth: .infinity, alignment: .trailing)

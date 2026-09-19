@@ -37,6 +37,43 @@ actor MLBAPIClient {
         return try await fetch(LiveFeedResponse.self, from: url)
     }
 
+    // MARK: - Push Feed (Gameday socket companion endpoints)
+
+    /// The push endpoints live on a different host than the rest of the Stats
+    /// API, and only that host honours `pushUpdateId`.
+    private static let pushBaseURL = "https://ws.statsapi.mlb.com"
+
+    /// Fetches the change set for one push update.
+    ///
+    /// `startTimecode` is the `metaData.timeStamp` of the copy we already hold,
+    /// not the timestamp of the incoming event — the server needs to know where
+    /// we are, not where it is.
+    ///
+    /// The response is usually an array of patch envelopes, but Gameday will
+    /// sometimes answer with a whole game object instead. Callers must handle
+    /// both, which is why this returns the raw tree.
+    func fetchDiffPatch(
+        gamePk: Int,
+        startTimecode: String,
+        pushUpdateId: String
+    ) async throws -> JSONValue {
+        let url = "\(Self.pushBaseURL)/api/v1.1/game/\(gamePk)/feed/live/diffPatch"
+            + "?language=en&startTimecode=\(startTimecode)&pushUpdateId=\(pushUpdateId)"
+        return try await fetchRaw(from: url)
+    }
+
+    /// Fetches the full game object as of a specific push update.
+    func fetchLiveFeedRaw(gamePk: Int, pushUpdateId: String? = nil) async throws -> JSONValue {
+        let url: String
+        if let pushUpdateId {
+            url = "\(Self.pushBaseURL)/api/v1.1/game/\(gamePk)/feed/live"
+                + "?language=en&pushUpdateId=\(pushUpdateId)"
+        } else {
+            url = "\(baseURL)/api/v1.1/game/\(gamePk)/feed/live"
+        }
+        return try await fetchRaw(from: url)
+    }
+
     // MARK: - BvP Stats
 
     func fetchBvP(batterId: Int, pitcherId: Int) async throws -> StatsResponse {
@@ -63,6 +100,27 @@ actor MLBAPIClient {
     }
 
     // MARK: - Private
+
+    /// Like `fetch`, but stops at the JSON tree instead of a typed model.
+    /// Patch operations address positions the typed models do not decode.
+    private func fetchRaw(from urlString: String) async throws -> JSONValue {
+        guard let url = URL(string: urlString) else {
+            throw APIError.invalidURL(urlString)
+        }
+        do {
+            let (data, response) = try await session.data(from: url)
+            if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                throw APIError.httpError(http.statusCode)
+            }
+            return try JSONValue.parse(data)
+        } catch let error as APIError {
+            throw error
+        } catch let error as DecodingError {
+            throw APIError.decodingError(error)
+        } catch {
+            throw APIError.networkError(error)
+        }
+    }
 
     private func fetch<T: Decodable>(_ type: T.Type, from urlString: String) async throws -> T {
         guard let url = URL(string: urlString) else {
