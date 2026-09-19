@@ -22,6 +22,35 @@ struct GamedayPushEvent: Decodable, Sendable {
         let type: String?
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case updateId, timeStamp, gamePk, gameEvents, logicalEvents, changeEvent
+    }
+
+    /// Decoded field by field rather than synthesised, so one surprising type
+    /// cannot sink the whole frame.
+    ///
+    /// Gameday sends `gamePk` as a quoted string — `"gamePk":"823898"` — even
+    /// though MLB's own typings call it a number. Synthesised decoding threw on
+    /// that and every event was discarded as unrecognised. Nothing here is
+    /// worth failing a frame over except `updateId`, which diffPatch cannot be
+    /// called without.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        updateId = try c.decode(String.self, forKey: .updateId)
+        timeStamp = try? c.decodeIfPresent(String.self, forKey: .timeStamp)
+        gameEvents = try? c.decodeIfPresent([String].self, forKey: .gameEvents)
+        logicalEvents = try? c.decodeIfPresent([String].self, forKey: .logicalEvents)
+        changeEvent = try? c.decodeIfPresent(ChangeEvent.self, forKey: .changeEvent)
+
+        if let n = try? c.decodeIfPresent(Int.self, forKey: .gamePk) {
+            gamePk = n
+        } else if let s = try? c.decodeIfPresent(String.self, forKey: .gamePk) {
+            gamePk = Int(s)
+        } else {
+            gamePk = nil
+        }
+    }
+
     /// Gameday sometimes decides the client should throw its copy away and start
     /// over. It does not explain why, so the only correct response is to comply.
     var isFullRefresh: Bool { changeEvent?.type == "full_refresh" }
