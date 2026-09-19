@@ -13,19 +13,26 @@ Last updated 2026-09-19.
 Works end to end on live games. Off by default. The full chain runs: socket →
 frame decode → `diffPatch` → RFC 6902 apply → re-decode → `diffTickState` → UI.
 
-Two runs so far, and **they disagree about how much this saves**:
+Three runs, consistent once the measurement was understood:
 
-| | 9th inning (LAD–SF) | 2nd inning (BOS–TB) |
-|---|---|---|
-| Full feed | 763 KB | ~295 KB |
-| Patched / Full refresh | 6 / 1 | 4 / 4 |
-| Push vs polling | 819 vs 5,344 KB (**85% less**) | 1,240 vs 2,358 KB (**47% less**) |
+| | 9th inn (LAD–SF) | 2nd inn (BOS–TB) | 3rd inn (BOS–TB) |
+|---|---|---|---|
+| Full feed | 763 KB | ~295 KB | 335 KB |
+| Patched / Full refresh | 6 / 1 | 4 / 4 | 9 / **1** |
+| Per update | ~9 KB | — | ~10 KB |
+| Push vs polling | 819 / 5,344 (**85%**) | 1,240 / 2,358 (47%) | 429 / 3,351 (**87%**) |
 
-One early reading was worse than break-even: 586 KB push against 584 KB
-polling. The difference is `Full refresh` climbing at roughly the same rate as
-`Patched` in early innings. Each refetch costs a whole feed, so a 1:1 ratio
-wipes out the saving. **The real full-game number is unknown** — 85% was the
-easiest possible case.
+The middle run's 4:4 ratio was an artifact of leaving and re-entering the
+game: each re-entry builds a fresh `LiveFeedStream` and pays a new seed,
+incrementing `Full refresh` without touching `sv`/`tc`/`ob`. Within a single
+sustained session `Full refresh` stays at **1**.
+
+So a patch costs ~10 KB against a 335 KB feed — roughly **33× cheaper per
+update**, 87% cumulative and improving as the seed amortises. `Patch ops`
+ran ~78 operations per update, confirming these are genuine small diffs.
+
+Still unmeasured: a complete game from the first pitch, where the feed grows
+past 700 KB and the ratio should improve further.
 
 ## Picking it back up
 
