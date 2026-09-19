@@ -67,6 +67,13 @@ struct DebugOverlayView: View {
                     + " tc\(push.refreshForMissingTimecode)"
                     + " ob\(push.wholeObjectResponses)")
                 row("Patch ops", "\(push.patchOpsApplied)")
+                if let why = push.disabledReason {
+                    Text("PUSH DISABLED — " + why)
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 if let frame = push.lastFrame {
                     Text(frame)
                         .font(.system(size: 8, design: .monospaced))

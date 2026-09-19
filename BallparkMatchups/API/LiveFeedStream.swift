@@ -33,6 +33,10 @@ struct PushFeedStats: Sendable, Equatable {
     var wholeObjectResponses = 0
     /// Total RFC 6902 operations applied, to show how small real diffs are.
     var patchOpsApplied = 0
+    /// Reset by any successful patch; the kill switch trips on this.
+    var consecutivePatchFailures = 0
+    /// Set when the push path has shut itself down for this session.
+    var disabledReason: String?
     var bytesOverPush = 0
     /// What the same updates would have cost as full-feed polls, using the most
     /// recent full feed as the per-poll size.
@@ -62,6 +66,8 @@ actor LiveFeedStream {
     enum Update: Sendable {
         case feed(LiveFeedResponse)
         case gameFinished
+        /// The push path gave up. The caller must fall back to polling alone.
+        case disabled(reason: String)
     }
 
     private let gamePk: Int
@@ -73,6 +79,17 @@ actor LiveFeedStream {
     private var tree: JSONValue?
 
     private(set) var stats = PushFeedStats()
+
+    /// A push path that keeps failing is worse than no push path at all: every
+    /// failure costs a full refetch while the backstop poll still runs. Rather
+    /// than quietly burning a phone's data on cell service, it stops.
+    ///
+    /// Scoped to this game session only — the stored flag is left alone, so a
+    /// transient problem does not silently cost the feature for good. Worst
+    /// case is a handful of wasted refetches per game, which is nothing beside
+    /// what polling a whole game costs anyway.
+    private static let consecutiveFailureLimit = 3
+    private var shouldDisable = false
 
     init(gamePk: Int, api: MLBAPIClient = .shared) {
         self.gamePk = gamePk
@@ -145,6 +162,11 @@ actor LiveFeedStream {
 
             case .update(let pushEvent):
                 await handle(pushEvent, yielding: continuation)
+                if shouldDisable {
+                    await socket.close()
+                    continuation.finish()
+                    return
+                }
             }
         }
         continuation.finish()
@@ -183,17 +205,38 @@ actor LiveFeedStream {
             guard let decoded = try? tree?.decoded(as: LiveFeedResponse.self) else {
                 // The tree no longer decodes — treat that exactly like a failed
                 // patch rather than shipping a half-updated card.
-                stats.patchFailures += 1
-                stats.lastError = "decode after patch"
-                _ = await seedFromFullFeed(yielding: continuation)
+                await recordFailure("decode after patch", yielding: continuation)
                 return
             }
+            stats.consecutivePatchFailures = 0
             continuation.yield(.feed(decoded))
         } catch {
-            stats.patchFailures += 1
-            stats.lastError = error.localizedDescription
-            _ = await seedFromFullFeed(yielding: continuation)
+            await recordFailure(error.localizedDescription, yielding: continuation)
         }
+    }
+
+    /// Records a failed update and trips the kill switch once they stack up.
+    ///
+    /// A seed failure is not counted — that is ordinary network trouble, and
+    /// polling would be failing too.
+    private func recordFailure(
+        _ reason: String,
+        yielding continuation: AsyncStream<Update>.Continuation
+    ) async {
+        stats.patchFailures += 1
+        stats.consecutivePatchFailures += 1
+        stats.lastError = reason
+
+        guard stats.consecutivePatchFailures >= Self.consecutiveFailureLimit else {
+            _ = await seedFromFullFeed(yielding: continuation)
+            return
+        }
+
+        let note = "\(stats.consecutivePatchFailures) failures in a row — \(reason)"
+        stats.disabledReason = note
+        stats.isConnected = false
+        shouldDisable = true
+        continuation.yield(.disabled(reason: note))
     }
 
     /// Applies a `diffPatch` response, which is either a list of change sets or

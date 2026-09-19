@@ -170,6 +170,12 @@ final class GameViewModel: ObservableObject {
                     self.connectionStatus = .ok
                 case .gameFinished:
                     break
+                case .disabled:
+                    // Push gave up. Polling is still running and pushIsHealthy
+                    // is already false, so the card simply returns to 5s.
+                    self.debugInfo.push = await stream.currentStats()
+                    self.stopPush()
+                    return
                 }
                 self.debugInfo.push = await stream.currentStats()
             }
