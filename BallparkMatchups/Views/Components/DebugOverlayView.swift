@@ -23,11 +23,27 @@ struct DebugOverlayView: View {
                 .overlay(Color.green.opacity(0.4))
                 .padding(.vertical, 2)
 
+            // A bare HStack of Text only hit-tests on the glyphs, so tapping
+            // the gaps did nothing. Fill the panel width, give it a real
+            // contentShape, and make it look like something you press.
             Button {
                 pushFlag.toggle()
                 FeatureFlags.pushFeedEnabled = pushFlag
             } label: {
-                row("Push feed", pushFlag ? "ON (reopen game)" : "off — tap")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("PUSH FEED")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(pushFlag ? .black : Color.green.opacity(0.8))
+                    Text(pushFlag ? "ON — reopen game" : "OFF — TAP HERE")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(pushFlag ? .black : .green)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 7)
+                .padding(.horizontal, 8)
+                .background(pushFlag ? Color.green : Color.green.opacity(0.12))
+                .overlay(Rectangle().stroke(Color.green, lineWidth: 1))
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
