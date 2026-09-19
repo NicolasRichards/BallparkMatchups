@@ -121,6 +121,7 @@ final class GameViewModel: ObservableObject {
                 await self.poll()
                 let interval = self.nextInterval()
                 guard interval.isFinite else { return }  // game over — stop the loop
+                self.debugInfo.pollingInterval = interval
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             }
         }
