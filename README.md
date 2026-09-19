@@ -117,6 +117,17 @@ but the socket, the endpoints, and the failure handling have not been watched
 through a real one. Enable it from the debug overlay and compare the byte
 counters against the polling backstop before trusting it.
 
+First thing to run on a Mac:
+
+```sh
+cd Tools/swift-verify && swift test      # typechecks the patch core under Swift 6
+open BallparkMatchups.xcodeproj          # then build the app
+```
+
+`Tools/swift-verify` symlinks `BallparkMatchups/API/JSONValue.swift` rather than
+copying it, so there is one source of truth and `swift test` compiles the same
+code the app ships.
+
 ---
 
 ## Debug Overlay

@@ -47,6 +47,20 @@ Measured across both fixture pairs (290 operations total: 236 `replace`,
   value-oriented, not meaning-oriented. Standard `copy` semantics handle it;
   do not try to interpret `from`.
 
+## Relationship to the Swift tests
+
+`Tools/swift-verify` runs the same checks as XCTest against the real Swift
+source (symlinked, not copied), and needs only a Mac with Xcode:
+
+```sh
+cd Tools/swift-verify && swift test
+```
+
+That is the authoritative check. This JS harness exists because it can also run
+the algorithm against **captured MLB fixtures** and cross-check byte-for-byte
+against a known-good implementation — neither of which the Swift tests can do
+without vendoring GPL content.
+
 ## Licensing boundary
 
 [AlecM33/mlb-gameday-bot](https://github.com/AlecM33/mlb-gameday-bot) is
