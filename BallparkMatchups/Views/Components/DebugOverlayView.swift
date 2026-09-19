@@ -60,6 +60,14 @@ struct DebugOverlayView: View {
                 row("Patched", "\(push.updatesApplied)")
                 row("Full refresh", "\(push.fullRefreshes)")
                 row("Patch fails", "\(push.patchFailures)")
+                row("Odd frames", "\(push.unrecognisedFrames)")
+                if let frame = push.lastFrame {
+                    Text(frame)
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 row("Push KB", "\(push.bytesOverPush / 1024)")
                 row("Poll KB est", "\(push.estimatedPollingBytes / 1024)")
                 if let err = push.lastError {

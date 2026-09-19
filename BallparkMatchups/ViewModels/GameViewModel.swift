@@ -815,9 +815,14 @@ final class GameViewModel: ObservableObject {
 
     /// Whether the push path has produced an update recently enough to lean on.
     private var pushIsHealthy: Bool {
-        guard FeatureFlags.pushFeedEnabled, let push = debugInfo.push, push.isConnected,
-              let last = push.lastUpdateAt else { return false }
-        return Date().timeIntervalSince(last) < 120
+        // An open socket is not evidence the push path is working. A live run
+        // showed it connected, delivering nothing, and the poll loop backing
+        // off to 60s anyway — which degrades the card for a real user. Back
+        // off only while patches are genuinely arriving.
+        guard FeatureFlags.pushFeedEnabled, let push = debugInfo.push,
+              push.isConnected, push.updatesApplied > 0,
+              let lastPatch = push.lastPatchAt else { return false }
+        return Date().timeIntervalSince(lastPatch) < 120
     }
 
     private func currentSeason() -> Int {

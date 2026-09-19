@@ -12,6 +12,14 @@ struct PushFeedStats: Sendable, Equatable {
     var fullRefreshes = 0
     var patchFailures = 0
     var duplicateOrEmpty = 0
+    /// Frames the socket delivered that did not decode as a push event.
+    var unrecognisedFrames = 0
+    /// A truncated copy of the most recent such frame.
+    var lastFrame: String?
+    /// Set only when a patch is actually applied — distinct from lastUpdateAt,
+    /// which a seed also bumps. Backing the poll loop off must depend on
+    /// patches genuinely arriving, not merely on the socket being open.
+    var lastPatchAt: Date?
     var bytesOverPush = 0
     /// What the same updates would have cost as full-feed polls, using the most
     /// recent full feed as the per-poll size.
@@ -110,6 +118,10 @@ actor LiveFeedStream {
                 stats.isConnected = false
                 stats.socketNote = reason
 
+            case .unrecognisedFrame(let text):
+                stats.unrecognisedFrames += 1
+                stats.lastFrame = text
+
             case .gameFinished:
                 // The socket closes on its own here. Take one last full copy so
                 // the final line score is the server's, not our patched guess.
@@ -150,6 +162,7 @@ actor LiveFeedStream {
             try applyResponse(response.value)
             stats.updatesApplied += 1
             stats.lastUpdateAt = Date()
+            stats.lastPatchAt = Date()
             stats.bytesOverPush += response.byteCount
 
             guard let decoded = try? tree?.decoded(as: LiveFeedResponse.self) else {
