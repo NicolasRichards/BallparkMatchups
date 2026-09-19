@@ -77,6 +77,44 @@ environment it exists for, and the one least like a simulator on a Mac.
 If `ob` turns out to dominate, the honest conclusion may be that this is not
 worth shipping. That is a legitimate outcome; the polling path already works.
 
+## Kill switch
+
+Three **consecutive** patch failures shut the push path down for the session:
+socket closes, stream reports `.disabled`, card returns to 5s polling. A
+success resets the count. Seed failures are not counted — ordinary network
+trouble, and polling would be failing too. Session-scoped, so the stored flag
+survives and the next game tries again. The overlay shows a red
+`PUSH DISABLED —` line with the reason.
+
+Rationale: a persistently failing push path is *worse* than none, because
+every failure costs a full refetch while the backstop poll still runs. An
+early reading showed exactly that — 586 KB spent against 584 KB of polling.
+
+## Known cost: foregrounding fetches twice
+
+`handleForeground()` calls `startPolling()`, which immediately polls (one full
+feed) **and** starts a new `LiveFeedStream` that seeds (another full feed).
+Polling alone would cost one. So each unlock is roughly 2× the feed size.
+
+Visible as `Full refresh` and `Request count` both incrementing together on
+every foreground. Ten unlocks over a game is ~7 MB on cell, which could swamp
+the savings for a frequent pocket-checker.
+
+Not fixed: the poll fetches the typed model and the stream needs the raw
+tree, so they are genuinely two different calls. Measure before deciding
+whether to restructure.
+
+## Soak test — what to record
+
+Testing on a phone, cell service only, locking mid-game. Worth noting:
+
+- Does `Socket` recover after iOS suspends the app? (`handleForeground`
+  rebuilds it, never verified)
+- Does the reconnect backoff behave when cell drops between innings?
+- `Full refresh` vs `Request count` per unlock — the double-fetch above
+- Whether the kill switch ever trips, and what `Last error` said
+- Memory over a full game: the raw tree is held alongside the decoded model
+
 ## Not yet exercised
 
 - Backgrounding and foregrounding at a real game
