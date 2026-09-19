@@ -50,6 +50,13 @@ struct DebugOverlayView: View {
             if let push = info.push {
                 row("Push active", info.pushEnabled ? "yes" : "no")
                 row("Socket", push.isConnected ? "connected" : "down")
+                if let note = push.socketNote, !push.isConnected {
+                    Text(note)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.yellow)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 row("Patched", "\(push.updatesApplied)")
                 row("Full refresh", "\(push.fullRefreshes)")
                 row("Patch fails", "\(push.patchFailures)")

@@ -34,10 +34,14 @@ struct GamedayPushEvent: Decodable, Sendable {
 /// covers that gap.
 actor GamedaySocket {
     enum Event: Sendable {
-        case connected
+        /// The task has been resumed. The handshake may still fail.
+        case connecting
+        /// A frame actually arrived, so the connection is genuinely up.
+        case opened
         case update(GamedayPushEvent)
         case gameFinished
-        case disconnected
+        /// Carries why, because a silent drop is undiagnosable.
+        case disconnected(reason: String)
     }
 
     private let gamePk: Int
@@ -55,14 +59,25 @@ actor GamedaySocket {
     private var lastPayloadLength: Int?
 
     private var reconnectAttempt = 0
+    private var hasReceivedFrame = false
 
     private static let heartbeatMessage = "Gameday5"
     private static let heartbeatInterval: Duration = .seconds(10)
     private static let maxReconnectDelay: Double = 30
 
-    init(gamePk: Int, session: URLSession = .shared) {
+    init(gamePk: Int, session: URLSession? = nil) {
         self.gamePk = gamePk
-        self.session = session
+        // URLSession.shared carries a 60s timeoutIntervalForRequest, which also
+        // bounds how long a websocket read may wait. Gameday can easily go
+        // quiet for longer than that between pitches, so the shared session
+        // would drop the connection on its own.
+        self.session = session ?? {
+            let config = URLSessionConfiguration.default
+            config.timeoutIntervalForRequest = 3600
+            config.timeoutIntervalForResource = 86_400
+            config.waitsForConnectivity = true
+            return URLSession(configuration: config)
+        }()
     }
 
     func events() -> AsyncStream<Event> {
@@ -97,8 +112,9 @@ actor GamedaySocket {
 
         let task = session.webSocketTask(with: url)
         socket = task
+        hasReceivedFrame = false
         task.resume()
-        continuation?.yield(.connected)
+        continuation?.yield(.connecting)
         startHeartbeat()
         pumpTask = Task { [weak self] in
             await self?.pump()
@@ -132,11 +148,15 @@ actor GamedaySocket {
         while !closed, let socket {
             do {
                 let message = try await socket.receive()
+                if !hasReceivedFrame {
+                    hasReceivedFrame = true
+                    continuation?.yield(.opened)
+                }
                 reconnectAttempt = 0
                 handle(message)
             } catch {
                 guard !closed else { return }
-                continuation?.yield(.disconnected)
+                continuation?.yield(.disconnected(reason: Self.describe(error, socket: socket)))
                 await scheduleReconnect()
                 return
             }
@@ -170,6 +190,18 @@ actor GamedaySocket {
             return
         }
         continuation?.yield(.update(event))
+    }
+
+    /// Close code plus the underlying error, which is the only thing that
+    /// distinguishes "MLB rejected us" from "the network went away".
+    private static func describe(_ error: Error, socket: URLSessionWebSocketTask) -> String {
+        let ns = error as NSError
+        let code = socket.closeCode.rawValue
+        var parts: [String] = []
+        if code != 0 { parts.append("close \(code)") }
+        parts.append("\(ns.domain) \(ns.code)")
+        parts.append(ns.localizedDescription)
+        return parts.joined(separator: " · ")
     }
 
     private func scheduleReconnect() async {

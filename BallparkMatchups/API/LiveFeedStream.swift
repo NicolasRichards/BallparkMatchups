@@ -6,6 +6,8 @@ import Foundation
 /// rather than trusted on principle.
 struct PushFeedStats: Sendable, Equatable {
     var isConnected = false
+    /// Why the socket is down, when it is. A silent drop is undiagnosable.
+    var socketNote: String?
     var updatesApplied = 0
     var fullRefreshes = 0
     var patchFailures = 0
@@ -96,11 +98,17 @@ actor LiveFeedStream {
         for await event in await socket.events() {
             if Task.isCancelled { break }
             switch event {
-            case .connected:
-                stats.isConnected = true
-
-            case .disconnected:
+            case .connecting:
                 stats.isConnected = false
+                stats.socketNote = "handshake…"
+
+            case .opened:
+                stats.isConnected = true
+                stats.socketNote = nil
+
+            case .disconnected(let reason):
+                stats.isConnected = false
+                stats.socketNote = reason
 
             case .gameFinished:
                 // The socket closes on its own here. Take one last full copy so
