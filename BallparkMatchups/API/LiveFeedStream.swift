@@ -20,6 +20,19 @@ struct PushFeedStats: Sendable, Equatable {
     /// which a seed also bumps. Backing the poll loop off must depend on
     /// patches genuinely arriving, not merely on the socket being open.
     var lastPatchAt: Date?
+
+    // Why a full refetch happened. Full refresh climbing at the same rate as
+    // Patched wipes out the saving, and these three causes need different
+    // fixes, so they are counted apart.
+    /// Gameday sent changeEvent.type == "full_refresh".
+    var refreshRequestedByServer = 0
+    /// We had no metaData.timeStamp to send as startTimecode.
+    var refreshForMissingTimecode = 0
+    /// diffPatch answered with a whole game object instead of a change set.
+    /// Counted as an update, but it costs a full feed.
+    var wholeObjectResponses = 0
+    /// Total RFC 6902 operations applied, to show how small real diffs are.
+    var patchOpsApplied = 0
     var bytesOverPush = 0
     /// What the same updates would have cost as full-feed polls, using the most
     /// recent full feed as the per-poll size.
@@ -144,11 +157,13 @@ actor LiveFeedStream {
         yielding continuation: AsyncStream<Update>.Continuation
     ) async {
         guard let timecode = currentTimecode() else {
+            stats.refreshForMissingTimecode += 1
             _ = await seedFromFullFeed(yielding: continuation, pushUpdateId: event.updateId)
             return
         }
 
         if event.isFullRefresh {
+            stats.refreshRequestedByServer += 1
             _ = await seedFromFullFeed(yielding: continuation, pushUpdateId: event.updateId)
             return
         }
@@ -191,6 +206,7 @@ actor LiveFeedStream {
                 return
             }
             let envelopes = try elements.map { try $0.decoded(as: DiffPatchEnvelope.self) }
+            stats.patchOpsApplied += envelopes.reduce(0) { $0 + $1.diff.count }
             // Patch a copy: a throw mid-batch would otherwise leave the live
             // mirror half-updated, and the caller cannot tell how far it got.
             var working = tree ?? .object([:])
@@ -201,6 +217,10 @@ actor LiveFeedStream {
 
         case .object:
             // Gameday answered with the whole game object instead of a diff.
+            // This costs a full feed, so it is worth knowing how often it
+            // happens — it is the difference between saving 85% and saving
+            // nothing.
+            stats.wholeObjectResponses += 1
             tree = response
 
         default:

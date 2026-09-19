@@ -61,6 +61,12 @@ struct DebugOverlayView: View {
                 row("Full refresh", "\(push.fullRefreshes)")
                 row("Patch fails", "\(push.patchFailures)")
                 row("Odd frames", "\(push.unrecognisedFrames)")
+                // Why the refetches happened: server-requested / no timecode /
+                // whole-object response, plus total ops applied.
+                row("Refresh why", "sv\(push.refreshRequestedByServer)"
+                    + " tc\(push.refreshForMissingTimecode)"
+                    + " ob\(push.wholeObjectResponses)")
+                row("Patch ops", "\(push.patchOpsApplied)")
                 if let frame = push.lastFrame {
                     Text(frame)
                         .font(.system(size: 8, design: .monospaced))
