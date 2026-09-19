@@ -39,6 +39,17 @@ actor MLBAPIClient {
 
     // MARK: - Push Feed (Gameday socket companion endpoints)
 
+    /// A parsed response plus the number of bytes it actually cost.
+    ///
+    /// Re-encoding the tree to estimate its size gives a different number than
+    /// the wire did — different whitespace, different key order. Since the whole
+    /// point of the push path is to spend fewer bytes, that measurement has to
+    /// be the real one.
+    struct RawResponse: Sendable {
+        let value: JSONValue
+        let byteCount: Int
+    }
+
     /// The push endpoints live on a different host than the rest of the Stats
     /// API, and only that host honours `pushUpdateId`.
     private static let pushBaseURL = "https://ws.statsapi.mlb.com"
@@ -56,14 +67,14 @@ actor MLBAPIClient {
         gamePk: Int,
         startTimecode: String,
         pushUpdateId: String
-    ) async throws -> JSONValue {
+    ) async throws -> RawResponse {
         let url = "\(Self.pushBaseURL)/api/v1.1/game/\(gamePk)/feed/live/diffPatch"
             + "?language=en&startTimecode=\(startTimecode)&pushUpdateId=\(pushUpdateId)"
         return try await fetchRaw(from: url)
     }
 
     /// Fetches the full game object as of a specific push update.
-    func fetchLiveFeedRaw(gamePk: Int, pushUpdateId: String? = nil) async throws -> JSONValue {
+    func fetchLiveFeedRaw(gamePk: Int, pushUpdateId: String? = nil) async throws -> RawResponse {
         let url: String
         if let pushUpdateId {
             url = "\(Self.pushBaseURL)/api/v1.1/game/\(gamePk)/feed/live"
@@ -103,7 +114,7 @@ actor MLBAPIClient {
 
     /// Like `fetch`, but stops at the JSON tree instead of a typed model.
     /// Patch operations address positions the typed models do not decode.
-    private func fetchRaw(from urlString: String) async throws -> JSONValue {
+    private func fetchRaw(from urlString: String) async throws -> RawResponse {
         guard let url = URL(string: urlString) else {
             throw APIError.invalidURL(urlString)
         }
@@ -112,7 +123,7 @@ actor MLBAPIClient {
             if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
                 throw APIError.httpError(http.statusCode)
             }
-            return try JSONValue.parse(data)
+            return RawResponse(value: try JSONValue.parse(data), byteCount: data.count)
         } catch let error as APIError {
             throw error
         } catch let error as DecodingError {

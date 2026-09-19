@@ -139,10 +139,10 @@ actor LiveFeedStream {
                 startTimecode: timecode,
                 pushUpdateId: event.updateId
             )
-            try applyResponse(response)
+            try applyResponse(response.value)
             stats.updatesApplied += 1
             stats.lastUpdateAt = Date()
-            stats.bytesOverPush += approximateSize(of: response)
+            stats.bytesOverPush += response.byteCount
 
             guard let decoded = try? tree?.decoded(as: LiveFeedResponse.self) else {
                 // The tree no longer decodes — treat that exactly like a failed
@@ -196,13 +196,13 @@ actor LiveFeedStream {
     ) async -> Bool {
         do {
             let raw = try await api.fetchLiveFeedRaw(gamePk: gamePk, pushUpdateId: pushUpdateId)
-            tree = raw
-            let size = approximateSize(of: raw)
-            stats.lastFullFeedBytes = size
-            stats.bytesOverPush += size
+            tree = raw.value
+            stats.lastFullFeedBytes = raw.byteCount
+            stats.bytesOverPush += raw.byteCount
             stats.fullRefreshes += 1
             stats.lastUpdateAt = Date()
-            continuation.yield(.feed(try raw.decoded(as: LiveFeedResponse.self)))
+            let feed = try raw.value.decoded(as: LiveFeedResponse.self)
+            continuation.yield(.feed(feed))
             return true
         } catch {
             stats.lastError = error.localizedDescription
@@ -219,9 +219,5 @@ actor LiveFeedStream {
               )
         else { return nil }
         return value
-    }
-
-    private func approximateSize(of value: JSONValue) -> Int {
-        (try? JSONEncoder().encode(value).count) ?? 0
     }
 }
