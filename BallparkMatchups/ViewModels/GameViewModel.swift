@@ -176,6 +176,15 @@ final class GameViewModel: ObservableObject {
         }
     }
 
+    /// Socket state changes inside the stream actor without yielding a feed
+    /// update, so the overlay would otherwise show a snapshot frozen at seed
+    /// time — before the socket even exists. The poll loop is already ticking,
+    /// so refresh from there too.
+    private func refreshPushStats() async {
+        guard let pushStream else { return }
+        debugInfo.push = await pushStream.currentStats()
+    }
+
     private func stopPush() {
         pushTask?.cancel()
         pushTask = nil
@@ -201,9 +210,11 @@ final class GameViewModel: ObservableObject {
             lastUpdated = Date()
             debugInfo.lastResponseTime = Date()
             debugInfo.requestCount = requestCount
+            await refreshPushStats()
 
             await processFeed(feed)
         } catch {
+            await refreshPushStats()
             consecutiveFailures += 1
             switch consecutiveFailures {
             case 1, 2:
