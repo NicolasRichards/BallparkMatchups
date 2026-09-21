@@ -37,6 +37,10 @@ struct PushFeedStats: Sendable, Equatable {
     var consecutivePatchFailures = 0
     /// Set when the push path has shut itself down for this session.
     var disabledReason: String?
+    /// The exact operation that failed, e.g. `remove /liveData/plays/.../0`.
+    /// The message alone does not say which path, and the path is the thing
+    /// that identifies the bug.
+    var lastFailedOperation: String?
     var bytesOverPush = 0
     /// What the same updates would have cost as full-feed polls, using the most
     /// recent full feed as the per-poll size.
@@ -254,7 +258,17 @@ actor LiveFeedStream {
             // mirror half-updated, and the caller cannot tell how far it got.
             var working = tree ?? .object([:])
             for envelope in envelopes {
-                try working.apply(envelope.diff)
+                for operation in envelope.diff {
+                    do {
+                        try working.apply(operation)
+                    } catch {
+                        // Record which operation failed before rethrowing.
+                        // "Index 0 out of bounds" says nothing about where.
+                        stats.lastFailedOperation =
+                            "\(operation.op.rawValue) \(operation.path)"
+                        throw error
+                    }
+                }
             }
             tree = working
 

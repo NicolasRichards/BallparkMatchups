@@ -83,8 +83,20 @@ struct DebugOverlayView: View {
                 }
                 row("Push KB", "\(push.bytesOverPush / 1024)")
                 row("Poll KB est", "\(push.estimatedPollingBytes / 1024)")
+                if let op = push.lastFailedOperation {
+                    Text("FAILED OP: " + op)
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 if let err = push.lastError {
-                    row("Last error", String(err.prefix(24)))
+                    // Not truncated: the count and path are the diagnosis.
+                    Text(err)
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
