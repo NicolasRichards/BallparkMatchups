@@ -304,6 +304,15 @@ extension JSONValue {
                         )
                     }
                     arr.insert(newValue, at: i)
+                } else if i == arr.count {
+                    // MLB uses `replace` where the spec would require `add`:
+                    // live traffic sends `replace /metaData/gameEvents/0`
+                    // against an array we hold empty, several times a game.
+                    // The reference implementation assigns by index and
+                    // JavaScript grows the array, so this has always worked
+                    // for it. Appending at exactly count matches that without
+                    // allowing a hole to be punched further out.
+                    arr.append(newValue)
                 } else {
                     guard arr.indices.contains(i) else {
                         throw JSONPatchError.arrayIndexOutOfBounds(
@@ -332,13 +341,16 @@ extension JSONValue {
         try withParent(of: pointer) { parent, token in
             switch parent {
             case .array(var arr):
-                guard let i = Int(token), arr.indices.contains(i) else {
+                guard let i = Int(token) else {
                     throw JSONPatchError.arrayIndexOutOfBounds(
-                        path: pointer.description,
-                        index: Int(token) ?? -1,
-                        count: arr.count
+                        path: pointer.description, index: -1, count: arr.count
                     )
                 }
+                // Removing an element that is not there has already been
+                // achieved. The reference splices out of range as a no-op,
+                // and throwing here would cost a full refetch to reach a
+                // state we are already in.
+                guard arr.indices.contains(i) else { return }
                 arr.remove(at: i)
                 parent = .array(arr)
 

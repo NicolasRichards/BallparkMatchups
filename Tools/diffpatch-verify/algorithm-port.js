@@ -63,6 +63,8 @@ function setValue(root, tokens, newValue, insert, fullPath) {
       if (i < 0 || i > parent.length)
         throw new PatchError(`arrayIndexOutOfBounds ${fullPath} idx=${i} count=${parent.length}`);
       parent.splice(i, 0, newValue);
+    } else if (i === parent.length) {
+      parent.push(newValue);          // MLB replaces where the spec wants add
     } else {
       if (i < 0 || i >= parent.length)
         throw new PatchError(`arrayIndexOutOfBounds ${fullPath} idx=${i} count=${parent.length}`);
@@ -79,8 +81,9 @@ function removeValue(root, tokens, fullPath) {
   const parent = descend(root, tokens.slice(0, -1), leaf, fullPath);
   if (Array.isArray(parent)) {
     const i = Number(leaf);
-    if (!Number.isInteger(i) || i < 0 || i >= parent.length)
+    if (!Number.isInteger(i))
       throw new PatchError(`arrayIndexOutOfBounds ${fullPath} idx=${leaf} count=${parent.length}`);
+    if (i < 0 || i >= parent.length) return;   // already absent — no-op
     parent.splice(i, 1);
   } else if (parent !== null && typeof parent === 'object') {
     if (!(leaf in parent)) throw new PatchError('pathNotFound ' + fullPath);
