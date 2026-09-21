@@ -139,6 +139,45 @@ final class JSONPatchTests: XCTestCase {
         XCTAssertEqual(try value(original, "/a/b"), .int(1), "original must not be mutated")
     }
 
+    // MARK: MLB's loose replace
+
+    /// Captured live, several times a game: MLB sends `replace` at index 0 of
+    /// an array we hold empty, where the spec would require `add`. Throwing
+    /// cost a full refetch — about 669 KB — each time.
+    func testReplaceAtCountAppendsRatherThanThrowing() throws {
+        var doc = try tree(#"{"metaData":{"gameEvents":[]}}"#)
+        try doc.apply(ops(#"[{"op":"replace","path":"/metaData/gameEvents/0","value":"ball"}]"#))
+        XCTAssertEqual(try value(doc, "/metaData/gameEvents"), .array([.string("ball")]))
+    }
+
+    /// Only exactly one past the end. Further out is a genuine gap, and
+    /// filling it would punch a hole in the array — better to refetch.
+    func testReplaceBeyondCountStillThrows() throws {
+        var doc = try tree(#"{"a":[1,2]}"#)
+        let beyond = try ops(#"[{"op":"replace","path":"/a/7","value":0}]"#)
+        XCTAssertThrowsError(try doc.apply(beyond))
+        XCTAssertEqual(try value(doc, "/a"), .array([.int(1), .int(2)]))
+    }
+
+    /// Removing an element that is not there has already been achieved.
+    func testRemovingAnAbsentArrayIndexIsANoOp() throws {
+        var doc = try tree(#"{"a":[]}"#)
+        try doc.apply(ops(#"[{"op":"remove","path":"/a/0"}]"#))
+        XCTAssertEqual(try value(doc, "/a"), .array([]))
+
+        var two = try tree(#"{"a":[1,2]}"#)
+        try two.apply(ops(#"[{"op":"remove","path":"/a/9"}]"#))
+        XCTAssertEqual(try value(two, "/a"), .array([.int(1), .int(2)]))
+    }
+
+    /// A missing object key is still an error — that is a real desync, not
+    /// a state we are already in.
+    func testRemovingAnAbsentObjectKeyStillThrows() throws {
+        var doc = try tree(#"{"a":1}"#)
+        let absent = try ops(#"[{"op":"remove","path":"/missing"}]"#)
+        XCTAssertThrowsError(try doc.apply(absent))
+    }
+
     // MARK: Round trip
 
     /// The tree is re-encoded and re-decoded into LiveFeedResponse after every
