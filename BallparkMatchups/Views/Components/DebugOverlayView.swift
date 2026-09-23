@@ -67,6 +67,10 @@ struct DebugOverlayView: View {
                     + " tc\(push.refreshForMissingTimecode)"
                     + " ob\(push.wholeObjectResponses)")
                 row("Patch ops", "\(push.patchOpsApplied)")
+                if push.deferredResolved > 0 || push.droppedOperations > 0 {
+                    row("Deferred", "ok\(push.deferredResolved)"
+                        + " drop\(push.droppedOperations)")
+                }
                 if let why = push.disabledReason {
                     Text("PUSH DISABLED — " + why)
                         .font(.system(size: 9, weight: .bold, design: .monospaced))

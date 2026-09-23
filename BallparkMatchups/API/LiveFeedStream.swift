@@ -41,6 +41,12 @@ struct PushFeedStats: Sendable, Equatable {
     /// The message alone does not say which path, and the path is the thing
     /// that identifies the bug.
     var lastFailedOperation: String?
+    /// copy/move operations that failed in place but succeeded once the rest
+    /// of the batch had been applied — i.e. MLB emitted them out of order.
+    var deferredResolved = 0
+    /// copy/move operations whose source never appeared. Dropped rather than
+    /// refetched; see applyResponse for why.
+    var droppedOperations = 0
     var bytesOverPush = 0
     /// What the same updates would have cost as full-feed polls, using the most
     /// recent full feed as the per-poll size.
@@ -257,19 +263,48 @@ actor LiveFeedStream {
             // Patch a copy: a throw mid-batch would otherwise leave the live
             // mirror half-updated, and the caller cannot tell how far it got.
             var working = tree ?? .object([:])
+            var deferred: [JSONPatchOperation] = []
+
             for envelope in envelopes {
                 for operation in envelope.diff {
                     do {
                         try working.apply(operation)
-                    } catch {
-                        // Record which operation failed before rethrowing.
-                        // "Index 0 out of bounds" says nothing about where.
+                    } catch let error as JSONPatchError {
+                        // A copy or move whose source is missing may simply be
+                        // out of order. MLB's differ is value-oriented and
+                        // emits operations against the final state, so the
+                        // source can be created by a later operation in the
+                        // same batch. Retry those once the batch has landed.
+                        if case .pathNotFound = error,
+                           operation.op == .copy || operation.op == .move {
+                            deferred.append(operation)
+                            continue
+                        }
+                        // Anything else is a real desync: record which
+                        // operation failed, then refetch.
                         stats.lastFailedOperation =
                             "\(operation.op.rawValue) \(operation.path)"
                         throw error
                     }
                 }
             }
+
+            for operation in deferred {
+                do {
+                    try working.apply(operation)
+                    stats.deferredResolved += 1
+                } catch {
+                    // The source never appeared. Dropping the operation leaves
+                    // us one value adrift of MLB, against a ~769 KB refetch to
+                    // correct it — and the paths this happens on, such as
+                    // about/captivatingIndex, are ones the typed model never
+                    // decodes. Counted so the trade stays visible.
+                    stats.droppedOperations += 1
+                    stats.lastFailedOperation =
+                        "dropped \(operation.op.rawValue) \(operation.path)"
+                }
+            }
+
             tree = working
 
         case .object:

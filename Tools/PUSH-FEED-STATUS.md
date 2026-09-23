@@ -13,7 +13,23 @@ Last updated 2026-09-19.
 Works end to end on live games. Off by default. The full chain runs: socket →
 frame decode → `diffPatch` → RFC 6902 apply → re-decode → `diffTickState` → UI.
 
-Three runs, consistent once the measurement was understood:
+Two full games measured, plus shorter sessions:
+
+| | MIL–BAL (pre-fix) | MIN–SF (post-fix) |
+|---|---|---|
+| Patched / Full refresh / fails | 63 / 18 / 5 | 117 / 27 / **3** |
+| Refresh why | sv12 tc0 ob10 | sv23 tc0 ob15 |
+| Push vs polling | 18.3 / 54.2 MB (**66%**) | 30.8 / 108.2 MB (**71.5%**) |
+
+`Full refresh` reconciles exactly both times: 1 seed + `sv` + patch failures.
+`tc0` across both games — the timecode handling has never failed.
+
+Essentially the entire push cost is full-size payloads: refreshes plus
+whole-object responses come to roughly the measured total, so the 100-odd
+genuine diffs are close to free. **`sv` and `ob` are MLB's behaviour and set
+the floor** — a perfect client cannot get below them.
+
+Earlier shorter runs:
 
 | | 9th inn (LAD–SF) | 2nd inn (BOS–TB) | 3rd inn (BOS–TB) |
 |---|---|---|---|
