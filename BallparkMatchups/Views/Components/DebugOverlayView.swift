@@ -2,6 +2,9 @@ import SwiftUI
 
 struct DebugOverlayView: View {
     let info: GameViewModel.DebugInfo
+    /// Flipping the flag needs a fresh game session to take effect, so this
+    /// reports the stored value rather than the one the running view model read.
+    @State private var pushFlag = FeatureFlags.pushFeedEnabled
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -15,6 +18,91 @@ struct DebugOverlayView: View {
             row("Candidates", "\(info.candidateSplits)")
             row("Shown splits", "\(info.shownSplits)")
             row("Last refresh", info.lastRefreshKind)
+
+            Divider()
+                .overlay(Color.green.opacity(0.4))
+                .padding(.vertical, 2)
+
+            // A bare HStack of Text only hit-tests on the glyphs, so tapping
+            // the gaps did nothing. Fill the panel width, give it a real
+            // contentShape, and make it look like something you press.
+            Button {
+                pushFlag.toggle()
+                FeatureFlags.pushFeedEnabled = pushFlag
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("PUSH FEED")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(pushFlag ? .black : Color.green.opacity(0.8))
+                    Text(pushFlag ? "ON — reopen game" : "OFF — TAP HERE")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(pushFlag ? .black : .green)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 7)
+                .padding(.horizontal, 8)
+                .background(pushFlag ? Color.green : Color.green.opacity(0.12))
+                .overlay(Rectangle().stroke(Color.green, lineWidth: 1))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if let push = info.push {
+                row("Push active", info.pushEnabled ? "yes" : "no")
+                row("Socket", push.isConnected ? "connected" : "down")
+                if let note = push.socketNote, !push.isConnected {
+                    Text(note)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.yellow)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                row("Patched", "\(push.updatesApplied)")
+                row("Full refresh", "\(push.fullRefreshes)")
+                row("Patch fails", "\(push.patchFailures)")
+                row("Odd frames", "\(push.unrecognisedFrames)")
+                // Why the refetches happened: server-requested / no timecode /
+                // whole-object response, plus total ops applied.
+                row("Refresh why", "sv\(push.refreshRequestedByServer)"
+                    + " tc\(push.refreshForMissingTimecode)"
+                    + " ob\(push.wholeObjectResponses)")
+                row("Patch ops", "\(push.patchOpsApplied)")
+                if push.deferredResolved > 0 || push.droppedOperations > 0 {
+                    row("Deferred", "ok\(push.deferredResolved)"
+                        + " drop\(push.droppedOperations)")
+                }
+                if let why = push.disabledReason {
+                    Text("PUSH DISABLED — " + why)
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if let frame = push.lastFrame {
+                    Text(frame)
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                row("Push KB", "\(push.bytesOverPush / 1024)")
+                row("Poll KB est", "\(push.estimatedPollingBytes / 1024)")
+                if let op = push.lastFailedOperation {
+                    Text("FAILED OP: " + op)
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if let err = push.lastError {
+                    // Not truncated: the count and path are the diagnosis.
+                    Text(err)
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
         }
         .padding(12)
         .background(Color.black.opacity(0.85))
@@ -22,7 +110,7 @@ struct DebugOverlayView: View {
             Rectangle()
                 .stroke(Color.green.opacity(0.5), lineWidth: 1)
         )
-        .frame(maxWidth: 220, alignment: .leading)
+        .frame(maxWidth: 240, alignment: .leading)
         .padding(.top, 110)
         .padding(.trailing, 16)
         .frame(maxWidth: .infinity, alignment: .trailing)

@@ -65,7 +65,10 @@ final class GameViewModel: ObservableObject {
     @Published var debugInfo: DebugInfo = DebugInfo()
 
     private var pollingTask: Task<Void, Never>?
+    private var pushTask: Task<Void, Never>?
+    private var pushStream: LiveFeedStream?
     private var lastTickState: TickState?
+    private var lastProcessedTimecode: String?
     private var consecutiveFailures = 0
     private var requestCount = 0
     private var betweenInningsStart: Date?
@@ -86,6 +89,8 @@ final class GameViewModel: ObservableObject {
         var candidateSplits: Int = 0
         var shownSplits: Int = 0
         var lastRefreshKind: String = "-"
+        var pushEnabled: Bool = false
+        var push: PushFeedStats?
     }
 
     struct CacheKey: Hashable {
@@ -116,19 +121,82 @@ final class GameViewModel: ObservableObject {
                 await self.poll()
                 let interval = self.nextInterval()
                 guard interval.isFinite else { return }  // game over — stop the loop
+                self.debugInfo.pollingInterval = interval
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             }
         }
+        startPushIfEnabled()
     }
 
     func stopPolling() {
         pollingTask?.cancel()
         pollingTask = nil
+        stopPush()
     }
 
     func handleForeground() {
         pollingTask?.cancel()
+        stopPush()
         startPolling()
+    }
+
+    // MARK: - Push Feed
+
+    /// Subscribes to the Gameday socket when the flag is on.
+    ///
+    /// Polling is deliberately left running as a backstop rather than switched
+    /// off. A missed socket event is invisible — there is nothing to retry and
+    /// no error to surface — so the loop keeps ticking at a slow interval and
+    /// `diffTickState` discards the redundant work for free.
+    private func startPushIfEnabled() {
+        // Tearing down first keeps a second startPolling() from stranding a
+        // live socket with nothing left holding its handle.
+        stopPush()
+        guard FeatureFlags.pushFeedEnabled else {
+            debugInfo.pushEnabled = false
+            return
+        }
+        debugInfo.pushEnabled = true
+
+        let stream = LiveFeedStream(gamePk: gamePk)
+        pushStream = stream
+        pushTask = Task { [weak self] in
+            for await update in await stream.start() {
+                guard let self, !Task.isCancelled else { return }
+                switch update {
+                case .feed(let feed):
+                    await self.processFeed(feed)
+                    self.lastUpdated = Date()
+                    self.connectionStatus = .ok
+                case .gameFinished:
+                    break
+                case .disabled:
+                    // Push gave up. Polling is still running and pushIsHealthy
+                    // is already false, so the card simply returns to 5s.
+                    self.debugInfo.push = await stream.currentStats()
+                    self.stopPush()
+                    return
+                }
+                self.debugInfo.push = await stream.currentStats()
+            }
+        }
+    }
+
+    /// Socket state changes inside the stream actor without yielding a feed
+    /// update, so the overlay would otherwise show a snapshot frozen at seed
+    /// time — before the socket even exists. The poll loop is already ticking,
+    /// so refresh from there too.
+    private func refreshPushStats() async {
+        guard let pushStream else { return }
+        debugInfo.push = await pushStream.currentStats()
+    }
+
+    private func stopPush() {
+        pushTask?.cancel()
+        pushTask = nil
+        let stream = pushStream
+        pushStream = nil
+        Task { await stream?.stop() }
     }
 
     // MARK: - Poll
@@ -148,9 +216,11 @@ final class GameViewModel: ObservableObject {
             lastUpdated = Date()
             debugInfo.lastResponseTime = Date()
             debugInfo.requestCount = requestCount
+            await refreshPushStats()
 
             await processFeed(feed)
         } catch {
+            await refreshPushStats()
             consecutiveFailures += 1
             switch consecutiveFailures {
             case 1, 2:
@@ -164,6 +234,16 @@ final class GameViewModel: ObservableObject {
     // MARK: - Feed Processing
 
     private func processFeed(_ feed: LiveFeedResponse) async {
+        // Two sources can deliver a feed once the push path is on, and a slow
+        // response can land after a newer one — which would walk the card
+        // backwards. GUMBO timecodes are YYYYMMDD_HHMMSS, so they order
+        // lexicographically; anything older than what we've already shown is
+        // dropped. An equal timecode is let through and costs nothing, since
+        // diffTickState resolves it to .none.
+        let timecode = feed.metaData.timeStamp
+        if let last = lastProcessedTimecode, timecode < last { return }
+        lastProcessedTimecode = timecode
+
         // Always refresh the score header from the latest linescore
         if let ls = feed.liveData?.linescore?.teams {
             scoreDisplay = ScoreDisplay(
@@ -719,7 +799,9 @@ final class GameViewModel: ObservableObject {
             }
             return 300
         case .live:
-            return 5
+            // The socket is the fast path when it is up; this is only a net for
+            // events it drops, so it does not need to be tight.
+            return pushIsHealthy ? 60 : 5
         case .betweenInnings:
             // Wait ~2 minutes from when the inning ended, then switch to 5s
             // so we catch the first pitch of the new half-inning quickly.
@@ -735,6 +817,18 @@ final class GameViewModel: ObservableObject {
         case .loading:
             return 12
         }
+    }
+
+    /// Whether the push path has produced an update recently enough to lean on.
+    private var pushIsHealthy: Bool {
+        // An open socket is not evidence the push path is working. A live run
+        // showed it connected, delivering nothing, and the poll loop backing
+        // off to 60s anyway — which degrades the card for a real user. Back
+        // off only while patches are genuinely arriving.
+        guard FeatureFlags.pushFeedEnabled, let push = debugInfo.push,
+              push.isConnected, push.updatesApplied > 0,
+              let lastPatch = push.lastPatchAt else { return false }
+        return Date().timeIntervalSince(lastPatch) < 120
     }
 
     private func currentSeason() -> Int {
