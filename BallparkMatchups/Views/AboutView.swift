@@ -71,6 +71,10 @@ struct AboutView: View {
                     Text("Thank you so much. 💛")
                         .primaryFont(size: 15)
                         .padding(.vertical, 8)
+                } else if tipJar.awaitingApproval {
+                    Text("Waiting for approval. Thank you!")
+                        .labelFont(size: 13)
+                        .padding(.vertical, 8)
                 } else if tipJar.loadFailed {
                     Text("Tip options couldn't load right now.")
                         .labelFont(size: 13)

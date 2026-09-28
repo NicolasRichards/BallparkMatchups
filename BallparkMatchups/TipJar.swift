@@ -14,10 +14,9 @@ final class TipJar {
         "com.nick.BallparkMatchups.tip.large",
     ]
 
-    /// Shared because the transaction listener has to outlive any one screen.
-    /// Running `listenForTransactions` from a sheet's `.task` cancelled it the
-    /// moment the sheet closed, so an Ask to Buy approval that landed later was
-    /// never finished and StoreKit kept redelivering it.
+    /// Shared so the tip screen and the app-level transaction listener see the
+    /// same state. Sharing alone doesn't keep the listener alive — see
+    /// `listenForTransactions` for where it has to be started.
     static let shared = TipJar()
 
     /// Loaded products, sorted cheapest first.
@@ -25,6 +24,8 @@ final class TipJar {
     private(set) var isLoading = false
     private(set) var purchasing: Product.ID?
     private(set) var didTip = false
+    /// A purchase came back `.pending` (Ask to Buy) and is waiting on approval.
+    private(set) var awaitingApproval = false
     var loadFailed = false
 
     func load() async {
@@ -42,13 +43,21 @@ final class TipJar {
     }
 
     /// Finishes any transaction that completes outside the purchase call
-    /// (Ask to Buy approvals, retries after an interruption). Runs for the
-    /// lifetime of the caller's `.task`.
+    /// (Ask to Buy approvals, retries after an interruption). It stops when the
+    /// caller's `.task` is cancelled, so it must be started from the app's root
+    /// view in the `App` body — never from the tip screen, or an Ask to Buy
+    /// approval that lands after the screen closes is never finished.
     func listenForTransactions() async {
         for await update in Transaction.updates {
-            guard case .verified(let transaction) = update else { continue }
-            await transaction.finish()
-            didTip = true
+            // Finish unverified transactions too: a tip unlocks nothing, and an
+            // unfinished transaction is redelivered on every launch.
+            await update.unsafePayloadValue.finish()
+            // Only thank someone waiting on an Ask to Buy approval. Anything else
+            // here is a leftover StoreKit redelivered at launch, not a new tip.
+            if case .verified = update, awaitingApproval {
+                awaitingApproval = false
+                didTip = true
+            }
         }
     }
 
@@ -59,11 +68,14 @@ final class TipJar {
             let result = try await product.purchase()
             switch result {
             case .success(let verification):
-                if case .verified(let transaction) = verification {
-                    await transaction.finish()
+                // Finished even if unverified, for the same reason as the listener.
+                await verification.unsafePayloadValue.finish()
+                if case .verified = verification {
                     didTip = true
                 }
-            case .userCancelled, .pending:
+            case .pending:
+                awaitingApproval = true
+            case .userCancelled:
                 break
             @unknown default:
                 break
