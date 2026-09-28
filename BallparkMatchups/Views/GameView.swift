@@ -19,15 +19,21 @@ struct GameView: View {
                 }
             }
 
+            #if DEBUG
             if showDebug {
                 DebugOverlayView(info: vm.debugInfo)
                     .transition(.opacity)
             }
+            #endif
         }
+        // The debug overlay is only for builds run from Xcode; archived builds
+        // (TestFlight and the App Store) don't get the gesture at all.
+        #if DEBUG
         .gesture(
             LongPressGesture(minimumDuration: 1.5)
                 .onEnded { _ in withAnimation { showDebug.toggle() } }
         )
+        #endif
     }
 
     // MARK: - Top Bar

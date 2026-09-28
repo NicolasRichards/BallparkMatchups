@@ -10,8 +10,17 @@ enum FeatureFlags {
     /// Off by default. The push path cannot be exercised outside a live game, so
     /// it stays opt-in until it has been watched through real ones — turn it on
     /// from the debug overlay and compare against the polling backstop.
+    ///
+    /// Always off in Release builds, where the overlay doesn't exist, so a
+    /// value saved by an earlier build can't switch it on in the App Store app.
     static var pushFeedEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: pushFeedKey) }
+        get {
+            #if DEBUG
+            UserDefaults.standard.bool(forKey: pushFeedKey)
+            #else
+            false
+            #endif
+        }
         set { UserDefaults.standard.set(newValue, forKey: pushFeedKey) }
     }
 }
