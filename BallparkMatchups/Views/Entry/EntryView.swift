@@ -240,6 +240,52 @@ struct LocationFailedView: View {
     }
 }
 
+// MARK: - Schedule Failed
+
+/// Location matched a ballpark, but loading its schedule failed.
+struct ScheduleFailedView: View {
+    @EnvironmentObject private var app: AppViewModel
+    let venue: CachedVenue
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("COULDN'T LOAD TODAY'S GAMES")
+                    .primaryFont(size: 20, weight: .bold)
+                Text("You're at \(venue.name), but the schedule didn't load. Check your connection and try again.")
+                    .labelFont(size: 15)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(spacing: 12) {
+                Button {
+                    Task { await app.resolveVenue(venue) }
+                } label: {
+                    Text("Try Again")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Theme.primaryText)
+                        .foregroundColor(.black)
+                        .font(.system(size: 17, weight: .semibold))
+                }
+
+                Button {
+                    app.state = .entry
+                } label: {
+                    Text("Back")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Theme.situationBackground)
+                        .foregroundColor(Theme.primaryText)
+                        .font(.system(size: 17, weight: .semibold))
+                        .overlay(Rectangle().stroke(Color(hex: "#333333"), lineWidth: 1))
+                }
+            }
+        }
+        .padding(24)
+    }
+}
+
 // MARK: - Not At Ballpark
 
 struct NotAtBallparkView: View {

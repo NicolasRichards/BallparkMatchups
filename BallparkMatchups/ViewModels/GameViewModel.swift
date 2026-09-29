@@ -81,6 +81,9 @@ final class GameViewModel: ObservableObject {
     private var playerCache: [Int: PlayerInfo] = [:]
     private var careerSplitCache: [CacheKey: [SplitLine]] = [:]
     private var careerBvPCache: [BvPKey: BvPLine?] = [:]
+    /// Batter's season OPS, the baseline the split filter compares against.
+    /// nil means the request worked but he has no season line yet.
+    private var seasonOPSCache: [Int: Double?] = [:]
     private var pitcherFirstAtBat: [Int: Int] = [:]  // pitcherId -> first atBatIndex
     private var observedPitcherEntry: Set<Int> = []  // pitchers we saw enter this session
 
@@ -414,7 +417,12 @@ final class GameViewModel: ObservableObject {
             halfInning: inning
         )
 
-        let refreshKind = diffTickState(old: lastTickState, new: newTick)
+        var refreshKind = diffTickState(old: lastTickState, new: newTick)
+        // Count and situation updates patch the live card in place. With no
+        // live card up — play resuming mid-at-bat after a delay or suspension —
+        // there is nothing to patch, and the old card would stay up until the
+        // at-bat ended. Rebuild instead.
+        if case .live = uiState {} else { refreshKind = .full }
         debugInfo.lastRefreshKind = "\(refreshKind)"
 
         if refreshKind == .none && lastTickState != nil { return }
@@ -502,7 +510,7 @@ final class GameViewModel: ObservableObject {
         )
 
         let allBatterSplits = careerBatterSplits + seasonBatterSplits
-        let careerOPS = careerBvPCache[BvPKey(batterId: tick.batterId, pitcherId: tick.pitcherId)]??.ops
+        let baselineOPS = await batterSeasonOPS(tick.batterId)
 
         let pitchCount = currentPitchCount(pitcherId: tick.pitcherId, in: feed)
         let careerPitcherSplits = cachedSplits(for: tick.pitcherId, isCareer: true)
@@ -522,7 +530,7 @@ final class GameViewModel: ObservableObject {
             pitchCount: pitchCount,
             isFirstBatter: isFirstBatter,
             isReliever: pitcherIsReliever(id: tick.pitcherId, in: feed),
-            careerOPS: careerOPS
+            baselineOPS: baselineOPS
         )
         debugInfo.candidateSplits = candidateCount
         debugInfo.shownSplits = newBatterSplits.count + (newPitcherSplit != nil ? 1 : 0)
@@ -586,7 +594,10 @@ final class GameViewModel: ObservableObject {
             isCareer: false
         )
 
+        async let seasonOPSResult = batterSeasonOPS(tick.batterId)
+
         let (batterInfo, pitcherInfo) = await (batter, pitcher)
+        let baselineOPS = await seasonOPSResult
         let (careerBatter, careerPitcher, seasonBatter, seasonPitcher) = await (
             careerBatterSplitsResult, careerPitcherSplitsResult,
             seasonBatterSplitsResult, seasonPitcherSplitsResult
@@ -619,7 +630,7 @@ final class GameViewModel: ObservableObject {
             pitchCount: pitchCount,
             isFirstBatter: isFirstBatter,
             isReliever: pitcherIsReliever(id: tick.pitcherId, in: feed),
-            careerOPS: bvp?.ops
+            baselineOPS: baselineOPS
         )
         debugInfo.candidateSplits = candidateCount
         debugInfo.shownSplits = newBatterSplits.count + (newPitcherSplit != nil ? 1 : 0)
@@ -677,6 +688,20 @@ final class GameViewModel: ObservableObject {
         return nil
     }
 
+    /// The batter's season OPS in this league. Only a successful answer is
+    /// cached, so a failed request is tried again on the next refresh.
+    private func batterSeasonOPS(_ batterId: Int) async -> Double? {
+        if let cached = seasonOPSCache[batterId] { return cached }
+        do {
+            let resp = try await api.fetchSeasonHitting(
+                playerId: batterId, season: currentSeason(), sportId: sportId
+            )
+            let ops = resp.seasonOPS()
+            seasonOPSCache[batterId] = ops
+            return ops
+        } catch { return nil }
+    }
+
     private func fetchBvP(batterId: Int, pitcherId: Int) async -> BvPLine? {
         do {
             let resp = try await api.fetchBvP(batterId: batterId, pitcherId: pitcherId, sportId: sportId)
@@ -723,7 +748,7 @@ final class GameViewModel: ObservableObject {
         pitchCount: Int?,
         isFirstBatter: Bool,
         isReliever: Bool,
-        careerOPS: Double?
+        baselineOPS: Double?
     ) -> (batterSplits: [SplitLine], pitcherSplit: SplitLine?, candidateCount: Int) {
         let pitcherHand = playerCache[tick.pitcherId]?.pitchHand
         let batterHand = playerCache[tick.batterId]?.batSide
@@ -732,7 +757,7 @@ final class GameViewModel: ObservableObject {
             tickState: tick,
             splits: batterSplits,
             pitcherHand: pitcherHand,
-            careerOPS: careerOPS,
+            baselineOPS: baselineOPS,
             maxCount: 3
         )
 

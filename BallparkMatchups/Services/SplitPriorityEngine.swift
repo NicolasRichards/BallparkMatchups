@@ -27,7 +27,7 @@ struct SplitPriorityEngine {
         tickState: TickState,
         splits: [SplitLine],
         pitcherHand: Handedness?,
-        careerOPS: Double?,
+        baselineOPS: Double?,
         maxCount: Int = 3
     ) -> [SplitLine] {
         let runners = RunnersState.from(
@@ -79,10 +79,13 @@ struct SplitPriorityEngine {
             }
         }
 
-        // §10.5 Information-gain filter: drop splits within 30 OPS points of career OPS
-        if let careerOPS {
+        // §10.5 Information-gain filter: drop splits within 30 OPS points of
+        // the batter's overall OPS, since they say nothing his line doesn't.
+        // The baseline must be his overall line: this was once passed the
+        // head-to-head OPS, which hid splits based on a few at-bats.
+        if let baselineOPS {
             selected = selected.filter { split in
-                abs(split.ops - careerOPS) >= 0.030
+                abs(split.ops - baselineOPS) >= 0.030
             }
         }
 
@@ -182,12 +185,19 @@ struct SplitPriorityEngine {
 
 extension StatsResponse {
     func toBvPLine() -> BvPLine? {
-        guard let split = stats.first?.splits.first else { return nil }
+        // vsPlayer answers with two groups: one row per season ("vsPlayer") and
+        // the career total ("vsPlayerTotal"). Their order varies between
+        // requests, so taking the first group sometimes showed a single
+        // season as the career line.
+        let total = stats.first { $0.type?.displayName == "vsPlayerTotal" } ?? stats.first
+        guard let split = total?.splits.first else { return nil }
         let stat = split.stat
         guard let pa = stat.plateAppearances, pa > 0 else { return nil }
         let opsDouble = stat.ops.flatMap { Double($0) }
         return BvPLine(
             pa: pa,
+            atBats: stat.atBats ?? 0,
+            hits: stat.hits ?? 0,
             avg: stat.avg ?? ".---",
             obp: stat.obp ?? ".---",
             slg: stat.slg ?? ".---",
@@ -196,6 +206,14 @@ extension StatsResponse {
             so: stat.strikeOuts ?? 0,
             bb: stat.baseOnBalls ?? 0
         )
+    }
+
+    /// OPS from a season line, using a traded player's combined row when there
+    /// is one rather than whichever team happens to be listed first.
+    func seasonOPS() -> Double? {
+        guard let splits = stats.first?.splits else { return nil }
+        let row = splits.first { $0.numTeams != nil } ?? splits.first
+        return row?.stat.ops.flatMap { Double($0) }
     }
 
     func toSplitLines(scope: String, minPA: Int) -> [SplitLine] {

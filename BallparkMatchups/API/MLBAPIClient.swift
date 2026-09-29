@@ -94,6 +94,15 @@ actor MLBAPIClient {
         return try await fetch(StatsResponse.self, from: url)
     }
 
+    // MARK: - Season Line
+
+    /// A player's season hitting line in the given league. A traded player gets
+    /// one row per team plus a combined row.
+    func fetchSeasonHitting(playerId: Int, season: Int, sportId: Int) async throws -> StatsResponse {
+        let url = "\(baseURL)/api/v1/people/\(playerId)/stats?stats=season&season=\(season)&group=hitting&sportId=\(sportId)"
+        return try await fetch(StatsResponse.self, from: url)
+    }
+
     // MARK: - Situational Splits
 
     /// `sportId` must be the game's league, for the same reason as `fetchBvP`.

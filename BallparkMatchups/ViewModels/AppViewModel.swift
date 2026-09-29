@@ -9,6 +9,8 @@ final class AppViewModel: ObservableObject {
     @Published var gameVM: GameViewModel?
     @Published var browseGames: [GameSummary] = []
     @Published var browseLoading = false
+    /// The last attempt to load the game list failed.
+    @Published var browseLoadFailed = false
     @Published var disambiguationVenues: [CachedVenue] = []
     @Published var noGameVenue: CachedVenue?
     @Published var nextHomeGame: GameSummary?
@@ -67,7 +69,7 @@ final class AppViewModel: ObservableObject {
             let games = schedule.validGames
             await selectGame(from: games, venue: venue)
         } catch {
-            state = .entry
+            state = .scheduleFailed(venue)
         }
     }
 
@@ -80,7 +82,12 @@ final class AppViewModel: ObservableObject {
         do {
             let schedule = try await api.fetchSchedule(date: dateString)
             browseGames = schedule.validGames.compactMap { mapToSummary($0) }
-        } catch {}
+            browseLoadFailed = false
+        } catch {
+            // Keep whatever list is up, but flag it so the screen can say it
+            // is out of date instead of passing it off as current.
+            browseLoadFailed = true
+        }
     }
 
     func selectGame(_ summary: GameSummary) async {
@@ -168,12 +175,13 @@ final class AppViewModel: ObservableObject {
         if games.count == 1 {
             gamePk = games[0].gamePk
         } else {
-            // Doubleheader
-            let inProgress = games.filter { $0.status.detailedState == "In Progress" }
+            // Doubleheader. Status comes from abstractGameState, so a delayed
+            // game still counts as under way and a postponed one counts as over.
+            let inProgress = games.filter { $0.status.isUnderway }
             if inProgress.count == 1 {
                 gamePk = inProgress[0].gamePk
             } else if inProgress.isEmpty {
-                let notFinal = games.first { !isFinal($0.status.detailedState) }
+                let notFinal = games.first { !$0.status.isOver }
                 gamePk = (notFinal ?? games[0]).gamePk
             } else {
                 gamePk = games[0].gamePk
@@ -181,10 +189,6 @@ final class AppViewModel: ObservableObject {
         }
 
         launchGame(gamePk: gamePk, venueName: venue.name)
-    }
-
-    private func isFinal(_ state: String) -> Bool {
-        ["Final", "Game Over", "Completed Early", "Suspended"].contains(state)
     }
 
     // MARK: - Next Home Game
@@ -205,7 +209,7 @@ final class AppViewModel: ObservableObject {
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             let resp = try JSONDecoder().decode(ScheduleResponse.self, from: data)
-            let future = resp.validGames.filter { !isFinal($0.status.detailedState) }
+            let future = resp.validGames.filter { !$0.status.isOver }
             if let first = future.first {
                 nextHomeGame = mapToSummary(first)
             }
@@ -236,7 +240,9 @@ final class AppViewModel: ObservableObject {
             venueName: game.venue.name ?? "Stadium",
             sportId: sportId,
             currentInning: game.linescore?.currentInning,
-            inningState: game.linescore?.inningState
+            inningState: game.linescore?.inningState,
+            isUnderway: game.status.isUnderway,
+            isOver: game.status.isOver
         )
     }
 

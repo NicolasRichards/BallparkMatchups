@@ -50,6 +50,29 @@ struct ScheduleResponse: Codable {
         struct GameStatus: Codable {
             let detailedState: String
             let statusCode: String?
+            /// "Preview", "Live" or "Final". Covers every variant of a state
+            /// ("Postponed: Rain", "Delayed: Rain", "Manager challenge"), which
+            /// an exact match on detailedState misses.
+            let abstractGameState: String?
+
+            /// Nothing more will be played today: final in any form, postponed,
+            /// cancelled, or suspended until another day.
+            var isOver: Bool {
+                if detailedState.hasPrefix("Suspended") { return true }
+                if let abstractGameState { return abstractGameState == "Final" }
+                return ["Final", "Game Over", "Completed Early", "Forfeit", "Postponed", "Cancelled"]
+                    .contains { detailedState.hasPrefix($0) }
+            }
+
+            /// The game has started and is still going, including delays and
+            /// replay reviews. Warmup is Live to MLB but no pitch has been thrown.
+            var isUnderway: Bool {
+                guard !isOver else { return false }
+                if let abstractGameState {
+                    return abstractGameState == "Live" && detailedState != "Warmup"
+                }
+                return detailedState == "In Progress"
+            }
         }
 
         struct GameTeams: Codable {
@@ -300,6 +323,8 @@ struct StatsResponse: Codable {
             let split: SplitInfo?
             let stat: StatLine
             let season: String?
+            /// Set only on a traded player's combined row.
+            let numTeams: Int?
 
             struct SplitInfo: Codable {
                 let code: String
