@@ -12,6 +12,7 @@ enum GameUIState {
     case suspended
     case final_(FinalInfo)
     case postponed(String)
+    case cancelled(String)
 }
 
 struct PreGameInfo {
@@ -72,6 +73,9 @@ final class GameViewModel: ObservableObject {
     private var consecutiveFailures = 0
     private var requestCount = 0
     private var betweenInningsStart: Date?
+    /// The game's league. Stats requests must name it, or a minor-league
+    /// player's splits and head-to-head numbers come back empty.
+    private var sportId = SportLevel.mlb.rawValue
 
     // In-memory caches
     private var playerCache: [Int: PlayerInfo] = [:]
@@ -254,10 +258,30 @@ final class GameViewModel: ObservableObject {
             )
         }
 
+        if let id = feed.gameData.teams.home.sport?.id { sportId = id }
+
         let status = feed.gameData.status.detailedState
 
+        // Match each status family by prefix. MLB appends a reason to most of
+        // them ("Completed Early: Rain", "Postponed: Rain", "Final: Tied"), and
+        // an exact match sent those to the in-progress path, where a finished
+        // game polled forever and a postponed one never left the spinner.
         switch status {
-        case "Scheduled", "Pre-Game", "Warmup":
+        case let s where s.hasPrefix("Final") || s.hasPrefix("Game Over")
+            || s.hasPrefix("Completed Early") || s.hasPrefix("Forfeit"):
+            handleFinal(feed)
+            stopPolling()
+
+        case let s where s.hasPrefix("Postponed"):
+            // The cause lives in status.reason, not in detailedState
+            uiState = .postponed(feed.gameData.status.reason ?? "")
+            stopPolling()
+
+        case let s where s.hasPrefix("Cancelled"):
+            uiState = .cancelled(feed.gameData.status.reason ?? "")
+            stopPolling()
+
+        case let s where s.hasPrefix("Scheduled") || s == "Pre-Game" || s == "Warmup":
             await handlePreGame(feed)
 
         case "In Progress":
@@ -272,15 +296,6 @@ final class GameViewModel: ObservableObject {
 
         case let s where s.hasPrefix("Suspended"):
             uiState = .suspended
-
-        case "Final", "Game Over", "Completed Early":
-            handleFinal(feed)
-            stopPolling()
-
-        case "Postponed":
-            // detailedState is just "Postponed" — the cause lives in status.reason
-            uiState = .postponed(feed.gameData.status.reason ?? "")
-            stopPolling()
 
         default:
             await handleInProgress(feed)
@@ -444,7 +459,11 @@ final class GameViewModel: ObservableObject {
             await refreshSituational(tick: newTick, feed: feed, isFirstBatter: isFirstBatter)
 
         case .full:
-            await refreshFull(tick: newTick, feed: feed, isFirstBatter: isFirstBatter)
+            // If the card couldn't be built (a player lookup failed, or the app
+            // was backgrounded mid-refresh), leave lastTickState alone so the
+            // next update retries. Recording it would turn the rest of this
+            // at-bat into count-only updates of the previous batter's card.
+            guard await refreshFull(tick: newTick, feed: feed, isFirstBatter: isFirstBatter) else { return }
 
         case .none:
             break
@@ -523,7 +542,8 @@ final class GameViewModel: ObservableObject {
 
     // MARK: - Full Refresh
 
-    private func refreshFull(tick: TickState, feed: LiveFeedResponse, isFirstBatter: Bool) async {
+    /// Returns false when the card could not be built.
+    private func refreshFull(tick: TickState, feed: LiveFeedResponse, isFirstBatter: Bool) async -> Bool {
         // Fetch both players in parallel
         async let batter = getOrFetchPlayer(id: tick.batterId)
         async let pitcher = getOrFetchPlayer(id: tick.pitcherId)
@@ -572,7 +592,7 @@ final class GameViewModel: ObservableObject {
             seasonBatterSplitsResult, seasonPitcherSplitsResult
         )
 
-        guard let bInfo = batterInfo, let pInfo = pitcherInfo else { return }
+        guard let bInfo = batterInfo, let pInfo = pitcherInfo else { return false }
 
         let runners = RunnersState.from(
             onFirst: tick.runnersCode.contains("1"),
@@ -618,6 +638,7 @@ final class GameViewModel: ObservableObject {
             pitcherGame: pitcherGame,
             lastEvent: extractLastEvent(feed: feed)
         ))
+        return true
     }
 
     // MARK: - Final
@@ -658,7 +679,7 @@ final class GameViewModel: ObservableObject {
 
     private func fetchBvP(batterId: Int, pitcherId: Int) async -> BvPLine? {
         do {
-            let resp = try await api.fetchBvP(batterId: batterId, pitcherId: pitcherId)
+            let resp = try await api.fetchBvP(batterId: batterId, pitcherId: pitcherId, sportId: sportId)
             return resp.toBvPLine()
         } catch { return nil }
     }
@@ -676,7 +697,7 @@ final class GameViewModel: ObservableObject {
     private func fetchSplits(playerId: Int, codes: [String], group: String, season: Int?, isCareer: Bool) async -> [SplitLine] {
         do {
             let minPA = isCareer ? 25 : 15
-            let resp = try await api.fetchSplits(playerId: playerId, sitCodes: codes, group: group, season: season)
+            let resp = try await api.fetchSplits(playerId: playerId, sitCodes: codes, group: group, season: season, sportId: sportId)
             let scope = season.map { String($0) } ?? "career"
             let lines = resp.toSplitLines(scope: scope, minPA: minPA)
             if isCareer {
@@ -812,7 +833,7 @@ final class GameViewModel: ObservableObject {
             return 120
         case .delay, .suspended:
             return 60
-        case .final_, .postponed:
+        case .final_, .postponed, .cancelled:
             return .infinity
         case .loading:
             return 12

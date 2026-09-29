@@ -115,6 +115,7 @@ final class AppViewModel: ObservableObject {
                 switch newState {
                 case .final_:     label = "Final"
                 case .postponed:  label = "Postponed"
+                case .cancelled:  label = "Cancelled"
                 case .suspended:  label = "Suspended"
                 default:          label = nil
                 }
@@ -140,7 +141,7 @@ final class AppViewModel: ObservableObject {
         let age = Date().timeIntervalSince(session.resolvedAt)
         guard age < 6 * 3600 else { clearSession(); return }
         if let last = session.lastKnownState,
-           ["Final", "Game Over", "Completed Early", "Postponed", "Suspended"].contains(last) {
+           ["Final", "Game Over", "Completed Early", "Postponed", "Cancelled", "Suspended"].contains(last) {
             clearSession(); return
         }
         let venueName: String

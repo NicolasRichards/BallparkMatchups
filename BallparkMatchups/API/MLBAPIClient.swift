@@ -87,16 +87,19 @@ actor MLBAPIClient {
 
     // MARK: - BvP Stats
 
-    func fetchBvP(batterId: Int, pitcherId: Int) async throws -> StatsResponse {
-        let url = "\(baseURL)/api/v1/people/\(batterId)/stats?stats=vsPlayer&opposingPlayerId=\(pitcherId)&group=hitting"
+    /// `sportId` must be the game's league. Without it the Stats API answers
+    /// with MLB numbers only, so a minor-league matchup comes back empty.
+    func fetchBvP(batterId: Int, pitcherId: Int, sportId: Int) async throws -> StatsResponse {
+        let url = "\(baseURL)/api/v1/people/\(batterId)/stats?stats=vsPlayer&opposingPlayerId=\(pitcherId)&group=hitting&sportId=\(sportId)"
         return try await fetch(StatsResponse.self, from: url)
     }
 
     // MARK: - Situational Splits
 
-    func fetchSplits(playerId: Int, sitCodes: [String], group: String = "hitting", season: Int? = nil) async throws -> StatsResponse {
+    /// `sportId` must be the game's league, for the same reason as `fetchBvP`.
+    func fetchSplits(playerId: Int, sitCodes: [String], group: String = "hitting", season: Int? = nil, sportId: Int) async throws -> StatsResponse {
         let codes = sitCodes.joined(separator: ",")
-        var url = "\(baseURL)/api/v1/people/\(playerId)/stats?stats=statSplits&sitCodes=\(codes)&group=\(group)"
+        var url = "\(baseURL)/api/v1/people/\(playerId)/stats?stats=statSplits&sitCodes=\(codes)&group=\(group)&sportId=\(sportId)"
         if let s = season {
             url += "&season=\(s)"
         }

@@ -119,6 +119,13 @@ struct GameView: View {
         case .postponed(let reason):
             PostponedView(reason: reason)
                 .padding(.top, 16)
+
+        case .cancelled(let reason):
+            SimpleStatusView(
+                title: "GAME CANCELLED",
+                detail: "Game was cancelled\(reason.isEmpty ? "." : " due to \(reason.lowercased()).")"
+            )
+            .padding(.top, 16)
         }
     }
 }
