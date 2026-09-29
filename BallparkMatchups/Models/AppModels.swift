@@ -103,6 +103,9 @@ struct BvPLine {
     let hr: Int
     let so: Int
     let bb: Int
+    /// What the line covers, e.g. "career" or, in the minors, "AAA career":
+    /// the API counts one level at a time.
+    var scope = "career"
 
     // Raw hit line used when PA is small. Built from the real counts:
     // deriving hits from avg × PA truncated 1-for-3 (.333 × 3) to 0 and
@@ -118,7 +121,8 @@ struct BvPLine {
 struct SplitLine {
     let sitCode: String
     let label: String       // "RISP, 2 OUT"
-    let scope: String       // "career" or "2026"
+    let scope: String       // display label: "career", "AAA career" or "2026"
+    let isCareer: Bool
     let pa: Int
     let avg: String
     let obp: String
@@ -279,6 +283,8 @@ struct GameSummary: Identifiable {
     /// From the schedule's status; see ScheduleGame.GameStatus.
     let isUnderway: Bool
     let isOver: Bool
+    /// gameDate is a placeholder (game 2 of a doubleheader).
+    let startTimeTBD: Bool
 
     var sportLevel: SportLevel? { SportLevel(rawValue: sportId) }
     var isMiLB: Bool { sportId != 1 }

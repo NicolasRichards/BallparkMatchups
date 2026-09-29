@@ -27,7 +27,8 @@ struct SplitPriorityEngine {
         tickState: TickState,
         splits: [SplitLine],
         pitcherHand: Handedness?,
-        baselineOPS: Double?,
+        seasonBaselineOPS: Double?,
+        careerBaselineOPS: Double?,
         maxCount: Int = 3
     ) -> [SplitLine] {
         let runners = RunnersState.from(
@@ -71,25 +72,27 @@ struct SplitPriorityEngine {
         var selected: [SplitLine] = []
         let splitMap = Dictionary(grouping: splits, by: \.sitCode)
 
+        // §10.5 Information-gain filter: drop splits within 30 OPS points of
+        // the batter's overall OPS, since they say nothing his line doesn't.
+        // Each split is measured against the baseline of its own scope — a
+        // career split against his career line, a season split against this
+        // season's — and it runs inside the loop, so a dropped split is
+        // replaced by the next candidate rather than leaving a gap.
+        func isInformative(_ split: SplitLine) -> Bool {
+            guard let baseline = split.isCareer ? careerBaselineOPS : seasonBaselineOPS else { return true }
+            return abs(split.ops - baseline) >= 0.030
+        }
+
         for code in candidates {
             guard selected.count < maxCount else { break }
             if let lines = splitMap[code],
-               let best = lines.first(where: { $0.scope == "career" }) ?? lines.first {
+               let best = lines.first(where: { $0.isCareer }) ?? lines.first,
+               isInformative(best) {
                 selected.append(best)
             }
         }
 
-        // §10.5 Information-gain filter: drop splits within 30 OPS points of
-        // the batter's overall OPS, since they say nothing his line doesn't.
-        // The baseline must be his overall line: this was once passed the
-        // head-to-head OPS, which hid splits based on a few at-bats.
-        if let baselineOPS {
-            selected = selected.filter { split in
-                abs(split.ops - baselineOPS) >= 0.030
-            }
-        }
-
-        return Array(selected.prefix(maxCount))
+        return selected
     }
 
     // MARK: - Pitcher Split Selection (§10.4 pitcher-side)
@@ -114,7 +117,7 @@ struct SplitPriorityEngine {
 
         func best(_ code: String) -> SplitLine? {
             guard let lines = splitMap[code] else { return nil }
-            return lines.first(where: { $0.scope == "career" }) ?? lines.first
+            return lines.first(where: { $0.isCareer }) ?? lines.first
         }
 
         if isReliever && isFirstBatter, let s = best("fba") { return s }
@@ -208,20 +211,26 @@ extension StatsResponse {
         )
     }
 
-    /// OPS from a season line, using a traded player's combined row when there
-    /// is one rather than whichever team happens to be listed first.
-    func seasonOPS() -> Double? {
+    /// OPS from a season or career line, using a traded player's combined row
+    /// when there is one rather than whichever team happens to be listed first.
+    func lineOPS() -> Double? {
         guard let splits = stats.first?.splits else { return nil }
         let row = splits.first { $0.numTeams != nil } ?? splits.first
         return row?.stat.ops.flatMap { Double($0) }
     }
 
-    func toSplitLines(scope: String, minPA: Int) -> [SplitLine] {
+    func toSplitLines(scope: String, isCareer: Bool, minPA: Int) -> [SplitLine] {
+        // A traded player gets one row per team plus a combined row, in no
+        // fixed order. Where a combined row exists, it is the season line.
+        let combinedCodes = Set(stats.flatMap(\.splits)
+            .filter { $0.numTeams != nil }
+            .compactMap { $0.split?.code })
         var result: [SplitLine] = []
         for group in stats {
             for entry in group.splits {
                 guard
                     let code = entry.split?.code,
+                    entry.numTeams != nil || !combinedCodes.contains(code),
                     // Pitching splits report battersFaced instead of plateAppearances
                     let pa = entry.stat.plateAppearances ?? entry.stat.battersFaced,
                     pa >= minPA,
@@ -237,6 +246,7 @@ extension StatsResponse {
                     sitCode: code,
                     label: SplitPriorityEngine.label(for: code),
                     scope: scope,
+                    isCareer: isCareer,
                     pa: pa,
                     avg: avg,
                     obp: obp,

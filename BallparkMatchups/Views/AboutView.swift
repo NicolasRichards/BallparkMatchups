@@ -67,13 +67,16 @@ struct AboutView: View {
                     .primaryFont(size: 13, weight: .bold)
                     .kerning(1.5)
 
+                // Ask to Buy: StoreKit says nothing if the parent declines, so the
+                // tip buttons stay available under this note.
+                if tipJar.awaitingApproval && !tipJar.didTip {
+                    Text("Waiting for approval. Thank you!")
+                        .labelFont(size: 13)
+                }
+
                 if tipJar.didTip {
                     Text("Thank you so much. 💛")
                         .primaryFont(size: 15)
-                        .padding(.vertical, 8)
-                } else if tipJar.awaitingApproval {
-                    Text("Waiting for approval. Thank you!")
-                        .labelFont(size: 13)
                         .padding(.vertical, 8)
                 } else if tipJar.loadFailed {
                     Text("Tip options couldn't load right now.")

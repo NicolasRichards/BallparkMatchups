@@ -264,7 +264,8 @@ struct GameRow: View {
                         .foregroundColor(game.detailedState == "In Progress" ? Theme.primaryText : Theme.secondaryText)
 
                     if game.detailedState != "In Progress" && game.detailedState != "Final" {
-                        Text(formatTime(game.gameDate))
+                        // A TBD game's listed time is a placeholder, not a start
+                        Text(game.startTimeTBD ? "TBD" : formatTime(game.gameDate))
                             .labelFont(size: 12)
                     }
                 }

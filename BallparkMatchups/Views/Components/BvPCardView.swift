@@ -5,7 +5,7 @@ struct BvPCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("BATTER vs PITCHER (career)")
+            Text("BATTER vs PITCHER (\(bvp.scope))")
                 .labelFont(size: 11)
                 .kerning(1.5)
 

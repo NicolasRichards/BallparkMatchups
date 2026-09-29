@@ -15,7 +15,9 @@ actor MLBAPIClient {
 
     // MARK: - Venues
 
-    func fetchVenues(season: Int = Calendar.current.component(.year, from: Date())) async throws -> VenueListResponse {
+    // Gregorian explicitly: Calendar.current follows the user's calendar
+    // setting, and the Japanese or Buddhist calendar would give 8 or 2569.
+    func fetchVenues(season: Int = Calendar(identifier: .gregorian).component(.year, from: Date())) async throws -> VenueListResponse {
         let url = "\(baseURL)/api/v1/venues?sportIds=1,11,12,13,14&hydrate=location,timezone&season=\(season)"
         return try await fetch(VenueListResponse.self, from: url)
     }
@@ -100,6 +102,12 @@ actor MLBAPIClient {
     /// one row per team plus a combined row.
     func fetchSeasonHitting(playerId: Int, season: Int, sportId: Int) async throws -> StatsResponse {
         let url = "\(baseURL)/api/v1/people/\(playerId)/stats?stats=season&season=\(season)&group=hitting&sportId=\(sportId)"
+        return try await fetch(StatsResponse.self, from: url)
+    }
+
+    /// A player's career hitting line in the given league.
+    func fetchCareerHitting(playerId: Int, sportId: Int) async throws -> StatsResponse {
+        let url = "\(baseURL)/api/v1/people/\(playerId)/stats?stats=career&group=hitting&sportId=\(sportId)"
         return try await fetch(StatsResponse.self, from: url)
     }
 

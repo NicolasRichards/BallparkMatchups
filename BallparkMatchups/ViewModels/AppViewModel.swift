@@ -26,9 +26,11 @@ final class AppViewModel: ObservableObject {
     // MARK: - Boot
 
     func onAppear() async {
-        // Load venue cache in background — entry screen doesn't need it.
-        // It will be ready long before the user taps "Detect location."
-        Task { await venueCache.load() }
+        // Load the venue cache first: session restore looks the saved venue up
+        // in it, and loading is local and quick. A background load let the
+        // lookup run first against an empty list. The network refresh can
+        // wait.
+        await venueCache.load()
         Task { await venueCache.reloadIfNeeded() }
         await restoreSessionIfValid()
         // If session restore didn't change the state, show the entry screen.
@@ -62,7 +64,10 @@ final class AppViewModel: ObservableObject {
     }
 
     func resolveVenue(_ venue: CachedVenue) async {
-        clearVenueResults()
+        // Keep the nearby-venue picker: if this venue has no game today, the
+        // user may want the other one. It's cleared once a game opens.
+        noGameVenue = nil
+        nextHomeGame = nil
         locationVenue = venue
         let dateString = venue.todayDateString()
         state = .loadingGame(gamePk: 0)
@@ -103,22 +108,24 @@ final class AppViewModel: ObservableObject {
 
     func selectGame(_ summary: GameSummary) async {
         gameReturnState = .browseGames
-        launchGame(gamePk: summary.gamePk, venueName: summary.venueName)
+        launchGame(gamePk: summary.gamePk, venueName: summary.venueName, venueId: summary.venueId)
     }
 
     // MARK: - Game Launch
 
-    func launchGame(gamePk: Int, venueName: String) {
+    func launchGame(gamePk: Int, venueName: String, venueId: Int?) {
         // Guard against double-launch (e.g. rapid taps or session restore race)
         guard gameVM == nil || gameVM?.gamePk != gamePk else { return }
         gameVM?.stopPolling()
         let vm = GameViewModel(gamePk: gamePk, venueName: venueName)
         gameVM = vm
         state = .game
+        disambiguationVenues = []
         vm.startPolling()
         saveSession(ActiveSession(
             gamePk: gamePk,
-            venueId: locationVenue?.id,
+            // The game's own venue, not whichever one was last detected
+            venueId: venueId,
             resolvedAt: Date(),
             lastKnownState: nil
         ))
@@ -169,7 +176,7 @@ final class AppViewModel: ObservableObject {
         } else {
             venueName = "Stadium"
         }
-        launchGame(gamePk: session.gamePk, venueName: venueName)
+        launchGame(gamePk: session.gamePk, venueName: venueName, venueId: session.venueId)
     }
 
     // MARK: - Schedule → Game Selection (§6.2)
@@ -199,7 +206,7 @@ final class AppViewModel: ObservableObject {
             }
         }
 
-        launchGame(gamePk: gamePk, venueName: venue.name)
+        launchGame(gamePk: gamePk, venueName: venue.name, venueId: venue.id)
     }
 
     // MARK: - Next Home Game
@@ -253,7 +260,8 @@ final class AppViewModel: ObservableObject {
             currentInning: game.linescore?.currentInning,
             inningState: game.linescore?.inningState,
             isUnderway: game.status.isUnderway,
-            isOver: game.status.isOver
+            isOver: game.status.isOver,
+            startTimeTBD: game.status.startTimeTBD == true
         )
     }
 

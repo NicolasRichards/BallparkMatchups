@@ -123,7 +123,6 @@ struct EntryView: View {
 
             Button {
                 app.state = .browseGames
-                Task { await app.loadBrowseGames() }
             } label: {
                 HStack {
                     Image(systemName: "list.bullet")
@@ -179,7 +178,6 @@ struct LocationDeniedView: View {
 
                 Button {
                     app.state = .browseGames
-                    Task { await app.loadBrowseGames() }
                 } label: {
                     Text("Pick ballpark manually")
                         .frame(maxWidth: .infinity)
@@ -224,7 +222,6 @@ struct LocationFailedView: View {
 
                 Button {
                     app.state = .browseGames
-                    Task { await app.loadBrowseGames() }
                 } label: {
                     Text("Pick ballpark manually")
                         .frame(maxWidth: .infinity)
@@ -303,7 +300,6 @@ struct NotAtBallparkView: View {
 
             Button {
                 app.state = .browseGames
-                Task { await app.loadBrowseGames() }
             } label: {
                 Text("Browse today's games")
                     .frame(maxWidth: .infinity)

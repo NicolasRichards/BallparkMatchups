@@ -23,6 +23,9 @@ struct PreGameCardView: View {
             if let fp = info.firstPitch {
                 Text("First pitch \(formatTime(fp))\(countdown.isEmpty ? "" : " (\(countdown))")")
                     .labelFont(size: 15)
+            } else {
+                Text("First pitch time TBD")
+                    .labelFont(size: 15)
             }
 
             Divider().background(Color(hex: "#222222"))
