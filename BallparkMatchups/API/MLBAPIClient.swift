@@ -105,6 +105,14 @@ actor MLBAPIClient {
 
     // MARK: - Situational Splits
 
+    /// Career totals for the same sitCodes. `statSplits` without a season is
+    /// only the current season; this is the endpoint that spans a career.
+    func fetchCareerSplits(playerId: Int, sitCodes: [String], group: String, sportId: Int) async throws -> StatsResponse {
+        let codes = sitCodes.joined(separator: ",")
+        let url = "\(baseURL)/api/v1/people/\(playerId)/stats?stats=careerStatSplits&sitCodes=\(codes)&group=\(group)&sportId=\(sportId)"
+        return try await fetch(StatsResponse.self, from: url)
+    }
+
     /// `sportId` must be the game's league, for the same reason as `fetchBvP`.
     func fetchSplits(playerId: Int, sitCodes: [String], group: String = "hitting", season: Int? = nil, sportId: Int) async throws -> StatsResponse {
         let codes = sitCodes.joined(separator: ",")

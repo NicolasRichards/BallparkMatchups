@@ -82,6 +82,8 @@ actor GamedaySocket {
 
     private let gamePk: Int
     private let session: URLSession
+    /// True when this socket made its own session and so must release it.
+    private let ownsSession: Bool
     private var socket: URLSessionWebSocketTask?
     private var pumpTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
@@ -103,6 +105,7 @@ actor GamedaySocket {
 
     init(gamePk: Int, session: URLSession? = nil) {
         self.gamePk = gamePk
+        self.ownsSession = session == nil
         // URLSession.shared carries a 60s timeoutIntervalForRequest, which also
         // bounds how long a websocket read may wait. Gameday can easily go
         // quiet for longer than that between pitches, so the shared session
@@ -136,6 +139,9 @@ actor GamedaySocket {
         socket = nil
         continuation?.finish()
         continuation = nil
+        // A URLSession holds its resources until it is invalidated, and each
+        // game opens a new one. Only release a session we created.
+        if ownsSession { session.invalidateAndCancel() }
     }
 
     // MARK: Connection

@@ -38,6 +38,7 @@ final class AppViewModel: ObservableObject {
     // MARK: - Detect Location
 
     func detectLocation() async {
+        clearVenueResults()
         state = .locating
         let result = await location.requestLocation()
         switch result {
@@ -61,6 +62,7 @@ final class AppViewModel: ObservableObject {
     }
 
     func resolveVenue(_ venue: CachedVenue) async {
+        clearVenueResults()
         locationVenue = venue
         let dateString = venue.todayDateString()
         state = .loadingGame(gamePk: 0)
@@ -71,6 +73,15 @@ final class AppViewModel: ObservableObject {
         } catch {
             state = .scheduleFailed(venue)
         }
+    }
+
+    /// The start screen's results from the last detection: the nearby-venue
+    /// picker and the "no game today" note. Left in place, they showed up again
+    /// after a game, and a later no-game venue could show this one's next game.
+    private func clearVenueResults() {
+        disambiguationVenues = []
+        noGameVenue = nil
+        nextHomeGame = nil
     }
 
     // MARK: - Browse Games

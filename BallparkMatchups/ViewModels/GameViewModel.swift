@@ -240,7 +240,32 @@ final class GameViewModel: ObservableObject {
 
     // MARK: - Feed Processing
 
+    /// The most recent feed still being processed.
+    private var feedProcessing: Task<Void, Never>?
+
+    /// Processes feeds one at a time, in the order they arrive.
+    ///
+    /// With the push path on, a poll and a push can land together, and the
+    /// handlers await network calls. Run side by side, an older feed could
+    /// finish after a newer one and overwrite its card; the timecode check in
+    /// processFeedInOrder only holds if each feed finishes before the next
+    /// starts. Polling alone never overlaps, so this costs it nothing.
     private func processFeed(_ feed: LiveFeedResponse) async {
+        let previous = feedProcessing
+        let task = Task { [weak self] in
+            await previous?.value
+            await self?.processFeedInOrder(feed)
+        }
+        feedProcessing = task
+        // Pass cancellation through, so backgrounding still stops the work.
+        await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    private func processFeedInOrder(_ feed: LiveFeedResponse) async {
         // Two sources can deliver a feed once the push path is on, and a slow
         // response can land after a newer one — which would walk the card
         // backwards. GUMBO timecodes are YYYYMMDD_HHMMSS, so they order
@@ -562,8 +587,14 @@ final class GameViewModel: ObservableObject {
         if let cached = careerBvPCache[bvpKey] {
             bvp = cached
         } else {
-            bvp = await fetchBvP(batterId: tick.batterId, pitcherId: tick.pitcherId)
-            careerBvPCache[bvpKey] = bvp
+            // Cache the answer, including "no history", but not a failed
+            // request — that would hide this matchup for the rest of the game.
+            do {
+                bvp = try await fetchBvP(batterId: tick.batterId, pitcherId: tick.pitcherId)
+                careerBvPCache[bvpKey] = bvp
+            } catch {
+                bvp = nil
+            }
         }
 
         // Career splits (cached per player)
@@ -702,11 +733,9 @@ final class GameViewModel: ObservableObject {
         } catch { return nil }
     }
 
-    private func fetchBvP(batterId: Int, pitcherId: Int) async -> BvPLine? {
-        do {
-            let resp = try await api.fetchBvP(batterId: batterId, pitcherId: pitcherId, sportId: sportId)
-            return resp.toBvPLine()
-        } catch { return nil }
+    /// nil means the two have never met; a thrown error means we don't know.
+    private func fetchBvP(batterId: Int, pitcherId: Int) async throws -> BvPLine? {
+        try await api.fetchBvP(batterId: batterId, pitcherId: pitcherId, sportId: sportId).toBvPLine()
     }
 
     private func fetchCareerSplitsIfNeeded(playerId: Int, codes: [String], group: String) async -> [SplitLine] {
@@ -714,16 +743,19 @@ final class GameViewModel: ObservableObject {
             careerSplitCache[CacheKey(playerId: playerId, sitCode: code, isCareer: true)]?.first
         }
         if !existing.isEmpty { return existing }
-        // MLB's statSplits endpoint defaults to current season without a season param;
-        // pass the current year explicitly so the label matches the data.
-        return await fetchSplits(playerId: playerId, codes: codes, group: group, season: currentSeason(), isCareer: true)
+        return await fetchSplits(playerId: playerId, codes: codes, group: group, season: nil, isCareer: true)
     }
 
     private func fetchSplits(playerId: Int, codes: [String], group: String, season: Int?, isCareer: Bool) async -> [SplitLine] {
         do {
             let minPA = isCareer ? 25 : 15
-            let resp = try await api.fetchSplits(playerId: playerId, sitCodes: codes, group: group, season: season, sportId: sportId)
-            let scope = season.map { String($0) } ?? "career"
+            // Career numbers need their own endpoint: statSplits without a
+            // season is only this season, which made the "career" baseline a
+            // duplicate of the season request.
+            let resp = isCareer
+                ? try await api.fetchCareerSplits(playerId: playerId, sitCodes: codes, group: group, sportId: sportId)
+                : try await api.fetchSplits(playerId: playerId, sitCodes: codes, group: group, season: season, sportId: sportId)
+            let scope = isCareer ? "career" : season.map { String($0) } ?? "career"
             let lines = resp.toSplitLines(scope: scope, minPA: minPA)
             if isCareer {
                 for line in lines {
