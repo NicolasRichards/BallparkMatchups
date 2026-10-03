@@ -18,14 +18,14 @@ actor MLBAPIClient {
     // Gregorian explicitly: Calendar.current follows the user's calendar
     // setting, and the Japanese or Buddhist calendar would give 8 or 2569.
     func fetchVenues(season: Int = Calendar(identifier: .gregorian).component(.year, from: Date())) async throws -> VenueListResponse {
-        let url = "\(baseURL)/api/v1/venues?sportIds=1,11,12,13,14&hydrate=location,timezone&season=\(season)"
+        let url = "\(baseURL)/api/v1/venues?sportIds=1,11,12,13,14,17&hydrate=location,timezone&season=\(season)"
         return try await fetch(VenueListResponse.self, from: url)
     }
 
     // MARK: - Schedule
 
     func fetchSchedule(date: String, venueId: Int? = nil) async throws -> ScheduleResponse {
-        var url = "\(baseURL)/api/v1/schedule?sportId=1,11,12,13,14&date=\(date)&hydrate=probablePitcher,team,linescore&gameTypes=R,F,D,L,W"
+        var url = "\(baseURL)/api/v1/schedule?sportId=1,11,12,13,14,17&date=\(date)&hydrate=probablePitcher,team,linescore&gameTypes=R,F,D,L,W"
         if let id = venueId {
             url += "&venueIds=\(id)"
         }
@@ -129,6 +129,15 @@ actor MLBAPIClient {
             url += "&season=\(s)"
         }
         return try await fetch(StatsResponse.self, from: url)
+    }
+
+    // MARK: - Team Metadata
+
+    /// A team's league. Needed only for the Fall League, where the game's
+    /// league says nothing about where a player's season numbers live.
+    /// A club's level never changes mid-season, so callers should cache this.
+    func fetchTeam(id: Int) async throws -> TeamDetailResponse {
+        try await fetch(TeamDetailResponse.self, from: "\(baseURL)/api/v1/teams/\(id)")
     }
 
     // MARK: - Player Metadata

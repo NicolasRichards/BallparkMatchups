@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Enums
 
 enum SportLevel: Int, CaseIterable {
-    case mlb = 1, aaa = 11, aa = 12, highA = 13, lowA = 14
+    case mlb = 1, aaa = 11, aa = 12, highA = 13, lowA = 14, fallLeague = 17
 
     var displayName: String {
         switch self {
@@ -12,6 +12,7 @@ enum SportLevel: Int, CaseIterable {
         case .aa: return "AA"
         case .highA: return "High-A"
         case .lowA: return "Low-A"
+        case .fallLeague: return "AFL"
         }
     }
 }
