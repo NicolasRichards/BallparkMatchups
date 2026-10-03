@@ -1,7 +1,10 @@
 # Arizona Fall League support — research notes
 
-Everything below was verified against the live Stats API on 2026-09-28, not
-inferred. AFL 2026 runs Oct 3 – Nov 14.
+Everything below was verified against the live Stats API — the API survey on
+2026-09-28, the opening-day lookups on 2026-10-03 — not inferred. AFL 2026
+runs Oct 3 – Nov 14.
+
+Line references are against `main` at `1fbb72b`.
 
 ## Short answer
 
@@ -10,9 +13,9 @@ The app does **not** show AFL games today. One gate blocks them: the
 
 | Gate | AFL status |
 |---|---|
-| `sportId=1,11,12,13,14` (`MLBAPIClient.swift:19,26`) | **blocks** — AFL is `sportId 17` |
+| `sportId=1,11,12,13,14` (`MLBAPIClient.swift:21,28`) | **blocks** — AFL is `sportId 17` |
 | `gameTypes=R,F,D,L,W` | passes — AFL games are `gameType: "R"` |
-| `validGames` (`MLBAPIClient.swift:185`) | passes, same reason |
+| `validGames` (`MLBAPIClient.swift:213`) | passes, same reason |
 | `venues.json` | Camelback Ranch (3809), Scottsdale Stadium (2532), Peoria Stadium (2530) all present with coordinates + `America/Phoenix` |
 | Venue `sportId` | hardcoded to 1 in `VenueCache.swift:49`, not a gate |
 | Team abbreviations | present (`SRR`, `SCO`) — score header fine |
