@@ -60,31 +60,62 @@ populated card is achievable.
 `Invalid Request with value: 11,12,13,14`. So each player's level must be
 known before the splits can be requested.
 
-## The cheap path, and the risk
+## Correction: minor-league stats are already handled
 
-`fetchPlayer` (`MLBAPIClient.swift:109`) already calls
-`/people/{id}?hydrate=currentTeam` for every batter and pitcher. If that
-response carries `currentTeam.sport.id`, the level comes for free — add a
-`sport` field to `PlayerResponse.PersonDetail.TeamRef`
-(`APIModels.swift:351`, currently only `id`/`name`/`abbreviation`) and thread
-it into `fetchSplits` and `fetchBvP`.
+An earlier draft of these notes claimed MiLB splits were broken app-wide.
+**That was wrong**, drawn from a stale checkout. `84dec37` threaded `sportId`
+through every stats call, sourced from the game's own feed:
 
-**Unresolved until Oct 3:** whether `currentTeam` still reports the player's
-MiLB club once the AFL is underway, or flips to their AFL club at
-`sport.id 17`. If it flips, every player needs a separate level-discovery
-call — roughly doubling the requests behind each matchup card.
-
-### Test on day one
-
-```
-https://statsapi.mlb.com/api/v1/people/{batterId}?hydrate=currentTeam
+```swift
+if let id = feed.gameData.teams.home.sport?.id { sportId = id }   // GameViewModel:302
 ```
 
-Take `batterId` from a live AFL game's `currentPlay.matchup.batter.id`.
+For AAA/AA/High-A/Low-A that is exactly right — the game's league *is* the
+player's league. AFL is the one case where they differ.
 
-- `sport.id` = 11/12/13/14 → cheap path, roughly an hour of work
-- `sport.id` = 17 → needs a level-discovery mechanism; decide whether the
-  extra call per player is worth it
+## Why AFL needs more than a sportId
+
+For an AFL game, `gameData.teams.home.sport.id` is **17**. Splits at
+`sportId=17` would be a handful of Fall League plate appearances, which the
+25 PA career / 15 PA season thresholds reject. The card would come up empty.
+
+What is wanted is the player's *own* league — Briggs McKenzie's 2026 High-A
+season, not his two AFL innings.
+
+## The lookup chain (verified live, 2026-10-03, opening day)
+
+```
+people/{id}?hydrate=currentTeam   →  currentTeam.id  432       (already fetched per batter/pitcher)
+teams/432                          →  sport.id 13 (High-A)      (static; cache for the session)
+people/{id}/stats?stats=statSplits&sitCodes=…&sportId=13&season=2026
+```
+
+Three findings from opening day, all confirmed against the live service:
+
+- **`currentTeam` stays on the MiLB club during the AFL.** Briggs McKenzie
+  (828987) reads `Rome Emperors` (id 432, `parentOrgId` 144) while actually
+  pitching for the Glendale Desert Dogs. This was the one thing that could
+  have killed the approach, and it held.
+- **`hydrate=currentTeam(sport)` does not work.** MLB silently ignores the
+  nested hydrate and returns a payload identical to plain `currentTeam` — no
+  error, just no `sport`. So the level cannot come free from the call the app
+  already makes.
+- **`teams/{id}` carries `sport`.** Rome Emperors → `{"id":13,"name":"High-A"}`.
+  One extra call per distinct club, cacheable forever since teams do not change
+  level mid-season, and only ever needed for the current batter and pitcher.
+
+## Shape of the work
+
+- add `17` to the schedule and venue `sportId` lists (`MLBAPIClient.swift:21,28`)
+- add a `SportLevel` case for 17 so the level badge renders
+- add `fetchTeam(id:)` returning `sport.id`, plus a team→level cache
+- at `GameViewModel.swift:302`, when the game's league is 17, resolve each
+  player's own league rather than the game's; every other level keeps today's
+  behaviour untouched
+
+Expect BvP to read "First meeting" for nearly everyone — two prospects who have
+met only in the Texas League have little head-to-head. Correct, not broken, but
+it is what an AFL card will mostly show.
 
 ## If the splits cannot be made to work
 
