@@ -87,6 +87,13 @@ final class GameViewModel: ObservableObject {
     /// Batter's overall OPS, the baselines the split filter compares against.
     /// nil means the request worked but he has no such line yet.
     private var baselineOPSCache: [BaselineKey: Double?] = [:]
+    /// playerId -> the league their real season numbers live in. Only
+    /// consulted for Fall League games; see `league(for:)`.
+    private var playerLeagueCache: [Int: Int] = [:]
+    /// teamId -> league. A club's level never changes mid-season.
+    private var teamLeagueCache: [Int: Int] = [:]
+    /// In-flight league lookups, so concurrent callers share one request.
+    private var leagueLookups: [Int: Task<Int, Never>] = [:]
     private var pitcherFirstAtBat: [Int: Int] = [:]  // pitcherId -> first atBatIndex
     private var observedPitcherEntry: Set<Int> = []  // pitchers we saw enter this session
 
@@ -741,6 +748,47 @@ final class GameViewModel: ObservableObject {
         return nil
     }
 
+    /// The league whose numbers actually describe this player.
+    ///
+    /// Everywhere but the Fall League this is the game's own league — a
+    /// Double-A game is played by Double-A players. AFL rosters are on loan
+    /// from clubs across the system, so a Glendale pitcher's real season may
+    /// be High-A. Asking for AFL numbers returns a handful of Fall League
+    /// plate appearances, which the split thresholds reject, leaving a card
+    /// with a name on it and nothing underneath.
+    ///
+    /// The feed's player block carries no club, so this needs its own lookup;
+    /// both steps are cached, and any failure falls back to the game's league
+    /// rather than dropping the stat.
+    private func league(for playerId: Int) async -> Int {
+        guard sportId == SportLevel.fallLeague.rawValue else { return sportId }
+        if let cached = playerLeagueCache[playerId] { return cached }
+        // Four call sites ask for the same batter's league at once — two
+        // baselines, his splits and the head-to-head. Without this they all
+        // miss the cache and each runs the pair of lookups.
+        if let inFlight = leagueLookups[playerId] { return await inFlight.value }
+
+        let task = Task { await self.resolveLeague(for: playerId) }
+        leagueLookups[playerId] = task
+        let level = await task.value
+        leagueLookups[playerId] = nil
+        playerLeagueCache[playerId] = level
+        return level
+    }
+
+    /// currentTeam -> that club's level. Either step failing falls back to the
+    /// game's league rather than dropping the stat entirely.
+    private func resolveLeague(for playerId: Int) async -> Int {
+        let person = try? await api.fetchPlayer(id: playerId)
+        guard let teamId = person?.people.first?.currentTeam?.id else { return sportId }
+        if let cached = teamLeagueCache[teamId] { return cached }
+
+        let team = try? await api.fetchTeam(id: teamId)
+        guard let level = team?.teams.first?.sport?.id else { return sportId }
+        teamLeagueCache[teamId] = level
+        return level
+    }
+
     /// The batter's season and career OPS in this league, or nil if either
     /// request failed. Only successful answers are cached, so a failure is
     /// tried again on the next refresh.
@@ -755,9 +803,10 @@ final class GameViewModel: ObservableObject {
     private func baselineOPS(_ batterId: Int, career: Bool) async throws -> Double? {
         let key = BaselineKey(batterId: batterId, isCareer: career)
         if let cached = baselineOPSCache[key] { return cached }
+        let batterLeague = await league(for: batterId)
         let resp = career
-            ? try await api.fetchCareerHitting(playerId: batterId, sportId: sportId)
-            : try await api.fetchSeasonHitting(playerId: batterId, season: currentSeason(), sportId: sportId)
+            ? try await api.fetchCareerHitting(playerId: batterId, sportId: batterLeague)
+            : try await api.fetchSeasonHitting(playerId: batterId, season: currentSeason(), sportId: batterLeague)
         let ops = resp.lineOPS()
         baselineOPSCache[key] = ops
         return ops
@@ -769,8 +818,13 @@ final class GameViewModel: ObservableObject {
         let key = BvPKey(batterId: batterId, pitcherId: pitcherId)
         if let cached = careerBvPCache[key] { return cached }
         do {
-            var line = try await api.fetchBvP(batterId: batterId, pitcherId: pitcherId, sportId: sportId).toBvPLine()
-            line?.scope = careerScope
+            // vsPlayer is the batter's own line, so it is scoped to his
+            // league. In the Fall League the pitcher may be at another level
+            // entirely, in which case there is no head-to-head to find and
+            // the card reads "First meeting" — correct, if sparse.
+            let batterLeague = await league(for: batterId)
+            var line = try await api.fetchBvP(batterId: batterId, pitcherId: pitcherId, sportId: batterLeague).toBvPLine()
+            line?.scope = careerScope(in: batterLeague)
             careerBvPCache[key] = line
             return line
         } catch { return nil }
@@ -778,9 +832,9 @@ final class GameViewModel: ObservableObject {
 
     /// What a career line covers. The API counts one level at a time, so in
     /// the minors "career" means career at this level.
-    private var careerScope: String {
-        guard sportId != SportLevel.mlb.rawValue else { return "career" }
-        return "\(SportLevel(rawValue: sportId)?.displayName ?? "minor league") career"
+    private func careerScope(in league: Int) -> String {
+        guard league != SportLevel.mlb.rawValue else { return "career" }
+        return "\(SportLevel(rawValue: league)?.displayName ?? "minor league") career"
     }
 
     private func fetchCareerSplitsIfNeeded(playerId: Int, codes: [String], group: String) async -> [SplitLine]? {
@@ -793,15 +847,17 @@ final class GameViewModel: ObservableObject {
 
     /// nil when the request failed, as opposed to [] for no qualifying splits.
     private func fetchSplits(playerId: Int, codes: [String], group: String, season: Int?, isCareer: Bool) async -> [SplitLine]? {
+        let playerLeague = await league(for: playerId)
         do {
             let minPA = isCareer ? 25 : 15
             // Career numbers need their own endpoint: statSplits without a
             // season is only this season, which made the "career" baseline a
             // duplicate of the season request.
             let resp = isCareer
-                ? try await api.fetchCareerSplits(playerId: playerId, sitCodes: codes, group: group, sportId: sportId)
-                : try await api.fetchSplits(playerId: playerId, sitCodes: codes, group: group, season: season, sportId: sportId)
-            let scope = isCareer ? careerScope : season.map { String($0) } ?? careerScope
+                ? try await api.fetchCareerSplits(playerId: playerId, sitCodes: codes, group: group, sportId: playerLeague)
+                : try await api.fetchSplits(playerId: playerId, sitCodes: codes, group: group, season: season, sportId: playerLeague)
+            let careerLabel = careerScope(in: playerLeague)
+            let scope = isCareer ? careerLabel : season.map { String($0) } ?? careerLabel
             let lines = resp.toSplitLines(scope: scope, isCareer: isCareer, minPA: minPA)
             if isCareer {
                 for line in lines {
