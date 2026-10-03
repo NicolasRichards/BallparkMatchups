@@ -63,6 +63,10 @@ struct ContentView: View {
         case .notAtBallpark:
             NotAtBallparkView()
                 .environmentObject(app)
+
+        case .scheduleFailed(let venue):
+            ScheduleFailedView(venue: venue)
+                .environmentObject(app)
         }
     }
 }

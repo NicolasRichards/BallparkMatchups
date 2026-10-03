@@ -94,6 +94,8 @@ struct PlayerInfo {
 
 struct BvPLine {
     let pa: Int
+    let atBats: Int
+    let hits: Int
     let avg: String
     let obp: String
     let slg: String
@@ -101,18 +103,26 @@ struct BvPLine {
     let hr: Int
     let so: Int
     let bb: Int
+    /// What the line covers, e.g. "career" or, in the minors, "AAA career":
+    /// the API counts one level at a time.
+    var scope = "career"
 
-    // Raw hit line used when PA is small
+    // Raw hit line used when PA is small. Built from the real counts:
+    // deriving hits from avg × PA truncated 1-for-3 (.333 × 3) to 0 and
+    // divided by PA, not AB, when there were walks.
     var rawLine: String {
-        let hits = Int((Double(avg) ?? 0) * Double(pa > 0 ? pa : 1))
-        return "\(hits)-for-\(pa > 0 ? pa : 0)\(hr > 0 ? ", \(hr) HR" : "")"
+        var parts = ["\(hits)-for-\(atBats)"]
+        if hr > 0 { parts.append("\(hr) HR") }
+        if bb > 0 { parts.append("\(bb) BB") }
+        return parts.joined(separator: ", ")
     }
 }
 
 struct SplitLine {
     let sitCode: String
     let label: String       // "RISP, 2 OUT"
-    let scope: String       // "career" or "2026"
+    let scope: String       // display label: "career", "AAA career" or "2026"
+    let isCareer: Bool
     let pa: Int
     let avg: String
     let obp: String
@@ -270,21 +280,22 @@ struct GameSummary: Identifiable {
     let sportId: Int
     let currentInning: Int?
     let inningState: String?
+    /// From the schedule's status; see ScheduleGame.GameStatus.
+    let isUnderway: Bool
+    let isOver: Bool
+    /// gameDate is a placeholder (game 2 of a doubleheader).
+    let startTimeTBD: Bool
 
     var sportLevel: SportLevel? { SportLevel(rawValue: sportId) }
     var isMiLB: Bool { sportId != 1 }
 
     var bucketLabel: String {
-        switch detailedState {
-        case "In Progress": return "LIVE NOW"
-        case "Final", "Game Over", "Completed Early": return "FINAL"
-        default:
-            let now = Date()
-            let diff = gameDate.timeIntervalSince(now)
-            if diff <= 7200 && diff > 0 { return "STARTING SOON" }
-            if diff <= 0 { return "FINAL" }
-            return "LATER TODAY"
-        }
+        if isUnderway { return "LIVE NOW" }
+        if isOver { return "FINAL" }
+        // Not started yet. Past its start time means it is late (a delayed
+        // start, a long warmup) — still coming, not over.
+        let diff = gameDate.timeIntervalSince(Date())
+        return diff <= 7200 ? "STARTING SOON" : "LATER TODAY"
     }
 
     var scoreDisplay: String? {
@@ -321,4 +332,6 @@ enum AppState {
     case locationDenied
     case locationFailed
     case notAtBallpark
+    /// Location matched a ballpark but its schedule couldn't be loaded.
+    case scheduleFailed(CachedVenue)
 }

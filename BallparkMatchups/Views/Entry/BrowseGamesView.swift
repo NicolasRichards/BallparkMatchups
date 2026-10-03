@@ -90,24 +90,88 @@ struct BrowseGamesView: View {
                 ProgressView()
                     .tint(Theme.secondaryText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if app.browseLoadFailed && app.browseGames.isEmpty {
+                messageView(
+                    title: "COULDN'T LOAD GAMES",
+                    detail: "Check your connection and try again.",
+                    showRetry: true
+                )
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                        let grouped = groupedGames()
-                        ForEach(grouped, id: \.bucket) { section in
-                            Section {
-                                ForEach(section.games) { game in
-                                    GameRow(game: game) {
-                                        Task { await app.selectGame(game) }
-                                    }
-                                    Divider()
-                                        .background(Color(hex: "#222222"))
-                                        .padding(.leading, 20)
-                                }
-                            } header: {
-                                bucketHeader(section.bucket)
-                            }
+                let grouped = groupedGames()
+                VStack(spacing: 0) {
+                    if app.browseLoadFailed {
+                        ConnectionBanner(
+                            text: "Couldn't refresh. This list may be out of date.",
+                            showRetry: true
+                        ) {
+                            Task { await app.loadBrowseGames() }
                         }
+                    }
+                    if grouped.isEmpty {
+                        messageView(title: emptyTitle, detail: nil, showRetry: false)
+                    } else {
+                        sectionList(grouped)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Why the list is empty. "No games today" would be wrong when the day has
+    /// games and only the filter is hiding them.
+    private var emptyTitle: String {
+        if app.browseGames.isEmpty { return "NO GAMES TODAY" }
+        switch filter {
+        case .live: return "NO GAMES LIVE RIGHT NOW"
+        case .mlb: return "NO MLB GAMES TODAY"
+        case .milb: return "NO MiLB GAMES TODAY"
+        case .all: return "NO GAMES TODAY"
+        }
+    }
+
+    private func messageView(title: String, detail: String?, showRetry: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .primaryFont(size: 16, weight: .bold)
+            if let detail {
+                Text(detail)
+                    .labelFont(size: 14)
+            }
+            if showRetry {
+                Button {
+                    Task { await app.loadBrowseGames() }
+                } label: {
+                    Text("Try Again")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Theme.primaryText)
+                        .foregroundColor(.black)
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .padding(.top, 8)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 24)
+    }
+
+    private func sectionList(_ grouped: [BucketSection]) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                ForEach(grouped, id: \.bucket) { section in
+                    Section {
+                        ForEach(section.games) { game in
+                            GameRow(game: game) {
+                                Task { await app.selectGame(game) }
+                            }
+                            Divider()
+                                .background(Color(hex: "#222222"))
+                                .padding(.leading, 20)
+                        }
+                    } header: {
+                        bucketHeader(section.bucket)
                     }
                 }
             }
@@ -134,7 +198,7 @@ struct BrowseGamesView: View {
         let filtered = app.browseGames.filter { game in
             switch filter {
             case .all: return true
-            case .live: return game.detailedState == "In Progress"
+            case .live: return game.isUnderway
             case .mlb: return !game.isMiLB
             case .milb: return game.isMiLB
             }
@@ -200,7 +264,8 @@ struct GameRow: View {
                         .foregroundColor(game.detailedState == "In Progress" ? Theme.primaryText : Theme.secondaryText)
 
                     if game.detailedState != "In Progress" && game.detailedState != "Final" {
-                        Text(formatTime(game.gameDate))
+                        // A TBD game's listed time is a placeholder, not a start
+                        Text(game.startTimeTBD ? "TBD" : formatTime(game.gameDate))
                             .labelFont(size: 12)
                     }
                 }

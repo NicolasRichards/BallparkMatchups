@@ -50,6 +50,32 @@ struct ScheduleResponse: Codable {
         struct GameStatus: Codable {
             let detailedState: String
             let statusCode: String?
+            /// "Preview", "Live" or "Final". Covers every variant of a state
+            /// ("Postponed: Rain", "Delayed: Rain", "Manager challenge"), which
+            /// an exact match on detailedState misses.
+            let abstractGameState: String?
+            /// Game 2 of a doubleheader with no set start. MLB then lists it at
+            /// game 1's time plus five minutes, which is not a real start time.
+            let startTimeTBD: Bool?
+
+            /// Nothing more will be played today: final in any form, postponed,
+            /// cancelled, or suspended until another day.
+            var isOver: Bool {
+                if detailedState.hasPrefix("Suspended") { return true }
+                if let abstractGameState { return abstractGameState == "Final" }
+                return ["Final", "Game Over", "Completed Early", "Forfeit", "Postponed", "Cancelled"]
+                    .contains { detailedState.hasPrefix($0) }
+            }
+
+            /// The game has started and is still going, including delays and
+            /// replay reviews. Warmup is Live to MLB but no pitch has been thrown.
+            var isUnderway: Bool {
+                guard !isOver else { return false }
+                if let abstractGameState {
+                    return abstractGameState == "Live" && detailedState != "Warmup"
+                }
+                return detailedState == "In Progress"
+            }
         }
 
         struct GameTeams: Codable {
@@ -103,11 +129,43 @@ struct LiveFeedResponse: Codable {
         let teams: GameTeams
         let venue: VenueRef?
         let probablePitchers: ProbablePitchers?
+        /// Everyone on either roster, keyed "ID123". Carries the name, position
+        /// and handedness the card needs, so no separate lookup is required.
+        let players: FeedPlayers?
 
         struct GameStatus: Codable {
             let detailedState: String
             let statusCode: String?
             let reason: String?   // e.g. "Rain" when postponed/delayed
+            let startTimeTBD: Bool?
+        }
+
+        /// Decoded player by player, so one odd record can't fail the whole feed.
+        struct FeedPlayers: Codable {
+            let byKey: [String: PlayerResponse.PersonDetail]
+
+            private struct Key: CodingKey {
+                let stringValue: String
+                var intValue: Int? { nil }
+                init(stringValue: String) { self.stringValue = stringValue }
+                init?(intValue: Int) { nil }
+            }
+
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: Key.self)
+                var players: [String: PlayerResponse.PersonDetail] = [:]
+                for key in c.allKeys {
+                    if let p = try? c.decode(PlayerResponse.PersonDetail.self, forKey: key) {
+                        players[key.stringValue] = p
+                    }
+                }
+                byKey = players
+            }
+
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: Key.self)
+                for (k, v) in byKey { try c.encode(v, forKey: Key(stringValue: k)) }
+            }
         }
 
         struct GameDatetime: Codable {
@@ -300,6 +358,8 @@ struct StatsResponse: Codable {
             let split: SplitInfo?
             let stat: StatLine
             let season: String?
+            /// Set only on a traded player's combined row.
+            let numTeams: Int?
 
             struct SplitInfo: Codable {
                 let code: String

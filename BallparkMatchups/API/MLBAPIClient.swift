@@ -15,7 +15,9 @@ actor MLBAPIClient {
 
     // MARK: - Venues
 
-    func fetchVenues(season: Int = Calendar.current.component(.year, from: Date())) async throws -> VenueListResponse {
+    // Gregorian explicitly: Calendar.current follows the user's calendar
+    // setting, and the Japanese or Buddhist calendar would give 8 or 2569.
+    func fetchVenues(season: Int = Calendar(identifier: .gregorian).component(.year, from: Date())) async throws -> VenueListResponse {
         let url = "\(baseURL)/api/v1/venues?sportIds=1,11,12,13,14&hydrate=location,timezone&season=\(season)"
         return try await fetch(VenueListResponse.self, from: url)
     }
@@ -87,16 +89,42 @@ actor MLBAPIClient {
 
     // MARK: - BvP Stats
 
-    func fetchBvP(batterId: Int, pitcherId: Int) async throws -> StatsResponse {
-        let url = "\(baseURL)/api/v1/people/\(batterId)/stats?stats=vsPlayer&opposingPlayerId=\(pitcherId)&group=hitting"
+    /// `sportId` must be the game's league. Without it the Stats API answers
+    /// with MLB numbers only, so a minor-league matchup comes back empty.
+    func fetchBvP(batterId: Int, pitcherId: Int, sportId: Int) async throws -> StatsResponse {
+        let url = "\(baseURL)/api/v1/people/\(batterId)/stats?stats=vsPlayer&opposingPlayerId=\(pitcherId)&group=hitting&sportId=\(sportId)"
+        return try await fetch(StatsResponse.self, from: url)
+    }
+
+    // MARK: - Season Line
+
+    /// A player's season hitting line in the given league. A traded player gets
+    /// one row per team plus a combined row.
+    func fetchSeasonHitting(playerId: Int, season: Int, sportId: Int) async throws -> StatsResponse {
+        let url = "\(baseURL)/api/v1/people/\(playerId)/stats?stats=season&season=\(season)&group=hitting&sportId=\(sportId)"
+        return try await fetch(StatsResponse.self, from: url)
+    }
+
+    /// A player's career hitting line in the given league.
+    func fetchCareerHitting(playerId: Int, sportId: Int) async throws -> StatsResponse {
+        let url = "\(baseURL)/api/v1/people/\(playerId)/stats?stats=career&group=hitting&sportId=\(sportId)"
         return try await fetch(StatsResponse.self, from: url)
     }
 
     // MARK: - Situational Splits
 
-    func fetchSplits(playerId: Int, sitCodes: [String], group: String = "hitting", season: Int? = nil) async throws -> StatsResponse {
+    /// Career totals for the same sitCodes. `statSplits` without a season is
+    /// only the current season; this is the endpoint that spans a career.
+    func fetchCareerSplits(playerId: Int, sitCodes: [String], group: String, sportId: Int) async throws -> StatsResponse {
         let codes = sitCodes.joined(separator: ",")
-        var url = "\(baseURL)/api/v1/people/\(playerId)/stats?stats=statSplits&sitCodes=\(codes)&group=\(group)"
+        let url = "\(baseURL)/api/v1/people/\(playerId)/stats?stats=careerStatSplits&sitCodes=\(codes)&group=\(group)&sportId=\(sportId)"
+        return try await fetch(StatsResponse.self, from: url)
+    }
+
+    /// `sportId` must be the game's league, for the same reason as `fetchBvP`.
+    func fetchSplits(playerId: Int, sitCodes: [String], group: String = "hitting", season: Int? = nil, sportId: Int) async throws -> StatsResponse {
+        let codes = sitCodes.joined(separator: ",")
+        var url = "\(baseURL)/api/v1/people/\(playerId)/stats?stats=statSplits&sitCodes=\(codes)&group=\(group)&sportId=\(sportId)"
         if let s = season {
             url += "&season=\(s)"
         }
