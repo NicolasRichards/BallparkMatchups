@@ -107,6 +107,36 @@ Three findings from opening day, all confirmed against the live service:
   One extra call per distinct club, cacheable forever since teams do not change
   level mid-season, and only ever needed for the current batter and pitcher.
 
+## Status: implemented and confirmed live
+
+Built for iPhone and Mac with no errors, and verified against a live AFL game
+on 2026-10-03 (Salt River at Glendale):
+
+- AFL games list under the MiLB tab with an `AFL` badge
+- The live card drives normally — batter, pitcher, situation, last play
+- Splits resolve to the player's **own** league. Chase Harlan's card reads
+  **"High-A career"**, `VS RIGHT .250/.356/.409 (104 PA)`,
+  `TWO STRIKES .169/.254/.237 (67 PA)`, with 12 candidates filtered to 2 —
+  the same behaviour as an MLB card. A label reading "AFL career" would mean
+  the fallback had fired.
+- The push feed works on AFL games too: socket connected, patches applying,
+  `sv0 tc0 ob0`, no failures.
+
+### Known cost
+
+A player's first appearance needs `fetchPlayer` then `fetchTeam` to complete
+before the splits request can be sent — two extra sequential round trips, AFL
+only. Cards seen immediately after opening a game can render before the splits
+land. Both caches hit thereafter. If the delay proves noticeable at a park, the
+fix is to resolve the on-deck batter's league ahead of time rather than on
+demand.
+
+### Still thin by nature
+
+Head-to-head will read "First meeting" for nearly everyone: two prospects who
+have faced each other only in the Texas League have no shared-level history.
+Correct, not broken.
+
 ## Shape of the work
 
 - add `17` to the schedule and venue `sportId` lists (`MLBAPIClient.swift:21,28`)
