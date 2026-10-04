@@ -178,6 +178,26 @@ final class JSONPatchTests: XCTestCase {
         XCTAssertThrowsError(try doc.apply(absent))
     }
 
+
+    /// An index past the end of an array can become valid once an earlier
+    /// operation in the same batch fills the gap. Captured live, five times in
+    /// one Fall League game: `replace /metaData/logicalEvents/2` against an
+    /// array holding a single element.
+    func testOutOfBoundsReplaceIsRetriedNotFatal() throws {
+        var doc = try tree(#"{"metaData":{"logicalEvents":["countChange"]}}"#)
+        let outOfOrder = try ops(#"[{"op":"replace","path":"/metaData/logicalEvents/2","value":"count13"}]"#)
+        XCTAssertThrowsError(try doc.apply(outOfOrder))
+
+        // Applied after the gap is filled, the same operation lands.
+        var filled = try tree(#"{"metaData":{"logicalEvents":["countChange"]}}"#)
+        try filled.apply(ops(#"[{"op":"add","path":"/metaData/logicalEvents/1","value":"basesEmpty"}]"#))
+        try filled.apply(outOfOrder)
+        XCTAssertEqual(
+            try value(filled, "/metaData/logicalEvents"),
+            .array([.string("countChange"), .string("basesEmpty"), .string("count13")])
+        )
+    }
+
     // MARK: Round trip
 
     /// The tree is re-encoded and re-decoded into LiveFeedResponse after every
