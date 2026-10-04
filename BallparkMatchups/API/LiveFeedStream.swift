@@ -249,6 +249,34 @@ actor LiveFeedStream {
         continuation.yield(.disabled(reason: note))
     }
 
+    /// Whether an operation that failed in place might succeed once the rest
+    /// of the batch has landed.
+    ///
+    /// MLB's differ emits operations against the game's *final* state, not in
+    /// dependency order, so an operation can legitimately reference something a
+    /// later one creates. Two shapes of that have been seen live:
+    ///
+    /// - a `copy` or `move` whose source does not exist yet;
+    /// - an `add` or `replace` past the end of an array, such as
+    ///   `replace /metaData/logicalEvents/2` arriving while that array holds a
+    ///   single element. An index exactly at the end already appends; this is
+    ///   the case where an earlier index is still missing.
+    ///
+    /// Anything else is a genuine desync and still earns a refetch.
+    private static func isWorthRetrying(
+        _ error: JSONPatchError,
+        _ op: JSONPatchOperation.Kind
+    ) -> Bool {
+        switch error {
+        case .pathNotFound:
+            return op == .copy || op == .move
+        case .arrayIndexOutOfBounds:
+            return op == .add || op == .replace
+        default:
+            return false
+        }
+    }
+
     /// Applies a `diffPatch` response, which is either a list of change sets or
     /// an entire replacement game object.
     private func applyResponse(_ response: JSONValue) throws {
@@ -270,13 +298,7 @@ actor LiveFeedStream {
                     do {
                         try working.apply(operation)
                     } catch let error as JSONPatchError {
-                        // A copy or move whose source is missing may simply be
-                        // out of order. MLB's differ is value-oriented and
-                        // emits operations against the final state, so the
-                        // source can be created by a later operation in the
-                        // same batch. Retry those once the batch has landed.
-                        if case .pathNotFound = error,
-                           operation.op == .copy || operation.op == .move {
+                        if Self.isWorthRetrying(error, operation.op) {
                             deferred.append(operation)
                             continue
                         }
