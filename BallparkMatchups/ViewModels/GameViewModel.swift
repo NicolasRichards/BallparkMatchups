@@ -1,55 +1,6 @@
 import Foundation
 import Combine
 
-// MARK: - Game UI State
-
-enum GameUIState {
-    case loading
-    case preGame(PreGameInfo)
-    case live(MatchupCard)
-    case betweenInnings(BetweenInningsInfo)
-    case delay(DelayInfo)
-    case suspended
-    case final_(FinalInfo)
-    case postponed(String)
-    case cancelled(String)
-}
-
-struct PreGameInfo {
-    let venueName: String
-    let homeTeam: String
-    let awayTeam: String
-    let firstPitch: Date?
-    let homePitcher: String?
-    let awayPitcher: String?
-    let homeHand: String?
-    let awayHand: String?
-}
-
-struct BetweenInningsInfo {
-    let inning: Int
-    let inningState: String   // "End" or "Middle"
-    let nextTeam: String      // team about to bat
-    let venueName: String
-}
-
-struct DelayInfo {
-    let reason: String        // from detailedState
-    let isPreGame: Bool
-}
-
-struct FinalInfo {
-    let homeTeam: String
-    let awayTeam: String
-    let homeScore: Int
-    let awayScore: Int
-    let winnerName: String?
-    let winnerRecord: String?
-    let loserName: String?
-    let loserRecord: String?
-    let saveName: String?
-}
-
 // MARK: - GameViewModel
 
 @MainActor
@@ -79,6 +30,15 @@ final class GameViewModel: ObservableObject {
     /// The game's league. Stats requests must name it, or a minor-league
     /// player's splits and head-to-head numbers come back empty.
     private var sportId = SportLevel.mlb.rawValue
+    /// MLB announced the end of the game on the socket. `detailedState` often
+    /// still reads "In Progress" at that moment, so the card must keep looking
+    /// rather than settle onto a between-innings timer for an inning that is
+    /// never coming.
+    private var gameEndAnnounced = false
+    /// How many innings this game is scheduled for: 9 normally, 7 for the
+    /// short games of a doubleheader. The end-of-game checks compare against
+    /// this rather than assuming nine.
+    private var scheduledInnings = 9
 
     // In-memory caches
     private var playerCache: [Int: PlayerInfo] = [:]
@@ -106,6 +66,11 @@ final class GameViewModel: ObservableObject {
         var candidateSplits: Int = 0
         var shownSplits: Int = 0
         var lastRefreshKind: String = "-"
+        /// Resolved league per player, batter then pitcher. 17 means the
+        /// lookup fell back to the game's own league, which yields Fall League
+        /// samples too small to clear the thresholds.
+        var batterLeague: Int?
+        var pitcherLeague: Int?
         var pushEnabled: Bool = false
         var push: PushFeedStats?
     }
@@ -136,6 +101,14 @@ final class GameViewModel: ObservableObject {
     // MARK: - Lifecycle
 
     func startPolling() {
+        beginPollLoop()
+        startPushIfEnabled()
+    }
+
+    /// Restarts the poll loop alone, leaving the socket as it is. Used when
+    /// something has happened that the loop should react to now rather than
+    /// after it finishes the sleep it is already in.
+    private func beginPollLoop() {
         pollingTask?.cancel()
         // The cancelled loop's poll may not have unwound yet. Its flag would
         // make the new loop's first poll a no-op and then wait a full interval.
@@ -150,7 +123,6 @@ final class GameViewModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             }
         }
-        startPushIfEnabled()
     }
 
     func stopPolling() {
@@ -194,7 +166,20 @@ final class GameViewModel: ObservableObject {
                     self.lastUpdated = Date()
                     self.connectionStatus = .ok
                 case .gameFinished:
-                    break
+                    // Observed on three games running: the last out lands, the
+                    // socket says the game is over, and the card sat on "END OF
+                    // THE 9TH" until the two-minute break timer expired. Note
+                    // it and poll now, so the final status is picked up as soon
+                    // as MLB publishes it.
+                    self.gameEndAnnounced = true
+                    self.debugInfo.push = await stream.currentStats()
+                    // Started before stopPush(), which cancels the very task
+                    // this runs in. An unstructured Task is not cancelled with
+                    // its creator, so either order works — this one leaves
+                    // nothing to reason about.
+                    self.beginPollLoop()
+                    self.stopPush()
+                    return
                 case .disabled:
                     // Push gave up. Polling is still running and pushIsHealthy
                     // is already false, so the card simply returns to 5s.
@@ -402,6 +387,7 @@ final class GameViewModel: ObservableObject {
         guard let linescore = feed.liveData?.linescore else { return }
 
         let inningState = linescore.inningState ?? "Top"
+        if let scheduled = linescore.scheduledInnings { scheduledInnings = scheduled }
 
         // Between-innings
         if inningState == "End" || inningState == "Middle" {
@@ -409,10 +395,11 @@ final class GameViewModel: ObservableObject {
             let homeRuns = linescore.teams?.home.runs ?? 0
             let awayRuns = linescore.teams?.away.runs ?? 0
 
-            // 9th inning or later with home team leading: game is over regardless of
-            // whether it's Middle (top half done, home doesn't need to bat) or End
-            // (bottom half done, home already won). Don't show between-innings.
-            if inning >= 9 && homeRuns > awayRuns {
+            // Last scheduled inning or later with home team leading: game is over
+            // regardless of whether it's Middle (top half done, home doesn't need
+            // to bat) or End (bottom half done, home already won). Don't show
+            // between-innings.
+            if inning >= scheduledInnings && homeRuns > awayRuns {
                 return
             }
 
@@ -773,6 +760,8 @@ final class GameViewModel: ObservableObject {
         let level = await task.value
         leagueLookups[playerId] = nil
         playerLeagueCache[playerId] = level
+        if playerId == lastTickState?.batterId { debugInfo.batterLeague = level }
+        if playerId == lastTickState?.pitcherId { debugInfo.pitcherLeague = level }
         return level
     }
 
@@ -972,34 +961,14 @@ final class GameViewModel: ObservableObject {
     }
 
     private func nextInterval() -> TimeInterval {
-        switch uiState {
-        case .preGame(let info):
-            if let fp = info.firstPitch {
-                let mins = fp.timeIntervalSinceNow / 60
-                return mins < 15 ? 30 : 300
-            }
-            return 300
-        case .live:
-            // The socket is the fast path when it is up; this is only a net for
-            // events it drops, so it does not need to be tight.
-            return pushIsHealthy ? 60 : 5
-        case .betweenInnings:
-            // Wait ~2 minutes from when the inning ended, then switch to 5s
-            // so we catch the first pitch of the new half-inning quickly.
-            if let start = betweenInningsStart {
-                // Opened mid-break: the break may be nearly over, so check often
-                guard sawBreakStart else { return 20 }
-                let remaining = 120 - Date().timeIntervalSince(start)
-                return remaining > 5 ? remaining : 5
-            }
-            return 120
-        case .delay, .suspended:
-            return 60
-        case .final_, .postponed, .cancelled:
-            return .infinity
-        case .loading:
-            return 12
-        }
+        PollSchedule.interval(PollSchedule.Inputs(
+            state: uiState,
+            pushIsHealthy: pushIsHealthy,
+            gameEndAnnounced: gameEndAnnounced,
+            scheduledInnings: scheduledInnings,
+            betweenInningsStart: betweenInningsStart,
+            sawBreakStart: sawBreakStart
+        ))
     }
 
     /// Whether the push path has produced an update recently enough to lean on.
