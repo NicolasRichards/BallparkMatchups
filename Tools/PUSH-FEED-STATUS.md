@@ -181,3 +181,59 @@ by network policy), and `statsapi.mlb.com` was unreachable. Everything was
 verified either through the JS harness or by Nicolas building and running on
 his Mac. Assume the same constraints unless proven otherwise — and never
 report Swift changes from that environment as compiled.
+
+## Full-game AFL measurement, 2026-10-04
+
+One nine-inning Fall League game, start to finish, on an iPhone with the
+screen awake the whole time, cell-only (no Wi-Fi), on battery for most of it.
+
+| | |
+|---|---|
+| Patches applied | 439 |
+| Full refreshes | 41 |
+| Patch failures | 5 |
+| Server-requested refresh / timecode / whole-object | `sv 35`, `tc 0`, `ob 36` |
+| Deferred and retried | 4 succeeded, 3 dropped |
+| Push bytes | 45,681 KB |
+| Poll estimate for the same game | 384,192 KB |
+| **Saved** | **88%** |
+
+`sv` and `ob` are MLB asking for a full copy or answering with whole objects.
+Together they are about two-thirds of what the push path still costs, and
+neither is avoidable from the client — that is simply what the server sends.
+
+## The end-of-game stall
+
+Reported three games running: the last out lands and the card stops updating.
+It never shows the third out and never shows the final — back out to the game
+list and the game reads as ended; go back in and the card reads as ended too.
+Waiting long enough also fixed it, which is the signature of an interval that
+is too long rather than a feed that is wrong.
+
+Three separate paths led to the same stall:
+
+1. `LiveFeedStream` yields `.gameFinished` after taking one last full copy,
+   and `GameViewModel` discarded it (`case .gameFinished: break`). MLB's REST
+   feed still reads "In Progress" for a few seconds past the final out, so
+   that last copy is usually *not* the final one — and by then the socket has
+   closed, leaving the poll loop as the only thing that can notice.
+2. With the socket counted healthy, `.live` backed the poll loop off to 60s.
+3. The last out of the ninth looks exactly like any other half-inning break,
+   so `.betweenInnings` settled onto its two-minute timer waiting for an
+   inning that was never coming.
+
+Fixed by latching a `gameEndAnnounced` flag when the socket says so, tearing
+the socket down, restarting the poll loop immediately (`beginPollLoop()`, split
+out of `startPolling()` so the socket is left alone), and treating the last
+scheduled inning's break as "keep checking" even with no socket at all.
+
+`scheduledInnings` now comes from `liveData.linescore.scheduledInnings` rather
+than being hardcoded to 9, so a doubleheader's seven-inning game ends at the
+seventh. The field's presence and position were confirmed from captured MLB
+feeds; a non-9 value was **not** verifiable from that session, as
+`statsapi.mlb.com` was blocked. The fallback is 9, so the worst case is the
+behaviour that shipped before.
+
+`PollSchedule.interval` was lifted out of `GameViewModel` for this, purely so
+the decision is testable without a live game — `PollScheduleTests` covers all
+three paths above plus every interval that must not have changed.
