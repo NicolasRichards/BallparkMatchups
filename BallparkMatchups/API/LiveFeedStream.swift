@@ -271,7 +271,10 @@ actor LiveFeedStream {
         case .pathNotFound:
             return op == .copy || op == .move
         case .arrayIndexOutOfBounds:
-            return op == .add || op == .replace
+            // Seen live as `copy /liveData/plays/allPlays/22/pitchIndex/2`
+            // against an empty array, so the destination can be short for the
+            // same reason an add or replace target can be.
+            return op == .add || op == .replace || op == .copy || op == .move
         default:
             return false
         }
