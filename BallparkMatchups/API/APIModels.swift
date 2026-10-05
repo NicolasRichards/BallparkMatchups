@@ -252,6 +252,9 @@ struct LiveFeedResponse: Codable {
             let currentInning: Int?
             let currentInningOrdinal: String?
             let inningState: String?
+            /// 9 for a normal game, 7 for the short games of a doubleheader.
+            /// The end-of-game logic reads this rather than assuming nine.
+            let scheduledInnings: Int?
             let offense: Offense?
             let defense: Defense?
             let balls: Int?
