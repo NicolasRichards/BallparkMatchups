@@ -18,6 +18,12 @@ struct DebugOverlayView: View {
             row("Candidates", "\(info.candidateSplits)")
             row("Shown splits", "\(info.shownSplits)")
             row("Last refresh", info.lastRefreshKind)
+            if info.batterLeague != nil || info.pitcherLeague != nil {
+                // 17 is the Fall League itself, i.e. the per-player lookup
+                // fell back and the splits are scoped to a meaningless sample.
+                row("League b/p", "\(info.batterLeague.map(String.init) ?? "-")"
+                    + "/\(info.pitcherLeague.map(String.init) ?? "-")")
+            }
 
             Divider()
                 .overlay(Color.green.opacity(0.4))
