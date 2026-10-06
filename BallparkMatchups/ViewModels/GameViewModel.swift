@@ -914,7 +914,8 @@ final class GameViewModel: ObservableObject {
     private func pitcherIsReliever(id: Int, in feed: LiveFeedResponse) -> Bool {
         guard let teams = feed.liveData?.boxscore?.teams else { return false }
         for side in [teams.home, teams.away] {
-            guard let list = side?.pitchers, let index = list.firstIndex(of: id) else { continue }
+            guard let list = side?.pitchers?.compactMap({ $0 }),
+                  let index = list.firstIndex(of: id) else { continue }
             return index > 0
         }
         return false
@@ -948,6 +949,7 @@ final class GameViewModel: ObservableObject {
 
     private func extractLastEvent(feed: LiveFeedResponse) -> String? {
         feed.liveData?.plays?.allPlays?
+            .compactMap({ $0 })
             .last(where: { $0.about?.isComplete == true })?
             .result?.description
     }

@@ -209,7 +209,10 @@ struct LiveFeedResponse: Codable {
 
         struct Plays: Codable {
             let currentPlay: CurrentPlay?
-            let allPlays: [Play]?
+            /// Elements are optional because a patch may grow this array past
+            /// its end, leaving nulls in the gap — see `JSONValue.grow`.
+            /// Decoding `[Play]` would throw on those and fail the whole feed.
+            let allPlays: [Play?]?
 
             struct Play: Codable {
                 let result: PlayResult?
@@ -301,7 +304,8 @@ struct LiveFeedResponse: Codable {
                 let away: TeamBox?
 
                 struct TeamBox: Codable {
-                    let pitchers: [Int]?
+                    /// Optional elements for the same reason as `allPlays`.
+                    let pitchers: [Int?]?
                     let players: [String: BoxPlayer]?
 
                     struct BoxPlayer: Codable {

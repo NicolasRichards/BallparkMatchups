@@ -103,12 +103,53 @@ for (const [feedFile, diffFile] of [
     JSON.stringify(doc));
 }
 
-// A failed op must throw so the caller can full-refresh, not silently corrupt.
+// Writing past the end of an array.
+//
+// This is what a live game actually does, and refusing it was a bug: the
+// array stayed short, so every later operation on it failed too — one game
+// dropped 51 operations behind a single short array. The reference assigns
+// straight into the index and lets JavaScript grow it, so each case below is
+// run through BOTH implementations and compared.
+{
+  const cases = [
+    ['add past the end',        { arr: [1, 2] },  { op: 'add',     path: '/arr/5', value: 9 }],
+    ['replace past the end',    { arr: [1, 2] },  { op: 'replace', path: '/arr/7', value: 0 }],
+    ['add to an empty array',   { arr: [] },      { op: 'add',     path: '/arr/3', value: 'x' }],
+    ['descend past the end',    { a: [{ b: 1 }] },{ op: 'add',     path: '/a/4/b', value: 2 }],
+    ['logicalEvents, as seen live',
+                                { metaData: { logicalEvents: ['countChange'] } },
+                                { op: 'add', path: '/metaData/logicalEvents/4', value: 'count12' }],
+  ];
+  for (const [name, doc, op] of cases) {
+    const a = JSON.parse(JSON.stringify(doc));
+    const b = JSON.parse(JSON.stringify(doc));
+    let mineErr = null, theirErr = null;
+    try { mine.apply(a, [op]); } catch (e) { mineErr = e; }
+    try { theirs.hydrate(b, { diff: [op] }); } catch (e) { theirErr = e; }
+    check(`grow: ${name} — neither implementation throws`,
+      mineErr === null && theirErr === null,
+      `mine=${mineErr && mineErr.message} theirs=${theirErr && theirErr.message}`);
+    check(`grow: ${name} — my result === reference result`,
+      JSON.stringify(a) === JSON.stringify(b),
+      `mine=${JSON.stringify(a)} theirs=${JSON.stringify(b)}`);
+  }
+}
+
+// An in-bounds `add` is still a true insert, which is where we deliberately
+// part company with the reference's plain assignment.
+{
+  const doc = { arr: ['a', 'b', 'c'] };
+  mine.apply(doc, [{ op: 'add', path: '/arr/1', value: 'x' }]);
+  check('grow: in-bounds add still inserts',
+    JSON.stringify(doc.arr) === JSON.stringify(['a', 'x', 'b', 'c']), JSON.stringify(doc.arr));
+}
+
+// A gap no real feed could produce is a corrupt frame, not an array to build.
 {
   let threw = false;
-  try { mine.apply({ arr: [1, 2] }, [{ op: 'replace', path: '/arr/7', value: 0 }]); }
+  try { mine.apply({ arr: [] }, [{ op: 'add', path: '/arr/2000000000', value: 1 }]); }
   catch (e) { threw = true; }
-  check('safety: out-of-bounds replace throws', threw, 'did not throw');
+  check('safety: an absurd index throws rather than allocating', threw, 'did not throw');
 
   let threw2 = false;
   try { mine.apply({ a: 1 }, [{ op: 'remove', path: '/missing' }]); }
