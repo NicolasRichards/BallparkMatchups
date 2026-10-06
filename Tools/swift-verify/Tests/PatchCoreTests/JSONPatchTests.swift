@@ -110,20 +110,16 @@ final class JSONPatchTests: XCTestCase {
 
     // MARK: Failure behaviour
 
-    /// A throw is the signal to refetch. Silently writing a hole would leave the
-    /// card showing a plausible wrong number, which is the worst outcome here.
-    func testOutOfBoundsAndMissingKeysThrow() throws {
-        var a = try tree(#"{"arr":[1,2]}"#)
-        let outOfBounds = try ops(#"[{"op":"replace","path":"/arr/7","value":0}]"#)
-        XCTAssertThrowsError(try a.apply(outOfBounds))
-
+    /// Removing a key that was never there means the diff and the tree
+    /// disagree about the shape of the document, which no retry can fix. A
+    /// throw is the signal to refetch.
+    ///
+    /// Writing past the end of an array used to throw here too. It no longer
+    /// does — see the growth tests below for why.
+    func testRemovingAnAbsentKeyThrows() throws {
         var b = try tree(#"{"a":1}"#)
         let absentKey = try ops(#"[{"op":"remove","path":"/missing"}]"#)
         XCTAssertThrowsError(try b.apply(absentKey))
-
-        var c = try tree(#"{"arr":[1]}"#)
-        let pastEnd = try ops(#"[{"op":"add","path":"/arr/5","value":0}]"#)
-        XCTAssertThrowsError(try c.apply(pastEnd))
     }
 
     /// LiveFeedStream patches a copy and commits only on success. This is the
@@ -131,9 +127,11 @@ final class JSONPatchTests: XCTestCase {
     func testFailedBatchLeavesTheOriginalUntouched() throws {
         let original = try tree(#"{"a":{"b":1},"arr":[1,2]}"#)
         var working = original
+        // The second operation must genuinely fail: a write past the end of
+        // an array grows it now, so it is no longer a way to abort a batch.
         let halfBad = try ops(#"""
         [{"op":"replace","path":"/a/b","value":2},
-         {"op":"replace","path":"/arr/9","value":0}]
+         {"op":"remove","path":"/nope"}]
         """#)
         XCTAssertThrowsError(try working.apply(halfBad))
         XCTAssertEqual(try value(original, "/a/b"), .int(1), "original must not be mutated")
@@ -148,15 +146,6 @@ final class JSONPatchTests: XCTestCase {
         var doc = try tree(#"{"metaData":{"gameEvents":[]}}"#)
         try doc.apply(ops(#"[{"op":"replace","path":"/metaData/gameEvents/0","value":"ball"}]"#))
         XCTAssertEqual(try value(doc, "/metaData/gameEvents"), .array([.string("ball")]))
-    }
-
-    /// Only exactly one past the end. Further out is a genuine gap, and
-    /// filling it would punch a hole in the array — better to refetch.
-    func testReplaceBeyondCountStillThrows() throws {
-        var doc = try tree(#"{"a":[1,2]}"#)
-        let beyond = try ops(#"[{"op":"replace","path":"/a/7","value":0}]"#)
-        XCTAssertThrowsError(try doc.apply(beyond))
-        XCTAssertEqual(try value(doc, "/a"), .array([.int(1), .int(2)]))
     }
 
     /// Removing an element that is not there has already been achieved.
@@ -251,7 +240,8 @@ final class JSONPatchTests: XCTestCase {
         var doc = try tree(#"""
         {"metaData":{"timeStamp":"20261005_190000"},
          "gameData":{"status":{"detailedState":"In Progress"},
-                     "teams":{"home":{"name":"Desert Dogs"},"away":{"name":"Rafters"}}},
+                     "teams":{"home":{"id":4001,"name":"Desert Dogs"},
+                              "away":{"id":4002,"name":"Rafters"}}},
          "liveData":{"plays":{"allPlays":[{"result":{"description":"Groundout"},
                                            "about":{"isComplete":true}}]}}}
         """#)
