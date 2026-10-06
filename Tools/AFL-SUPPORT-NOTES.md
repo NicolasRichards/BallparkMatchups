@@ -163,3 +163,27 @@ is not what the App Store description promises. A three-line change (add `17`
 to the two queries plus a `SportLevel` case in `AppModels.swift:6`) would ship
 it — **not recommended without the splits**, since an app built on situational
 stats that shows none invites one-star reviews from people who never learn why.
+
+## The League b/p overlay row never worked (found 2026-10-06)
+
+The row added to diagnose the silent fallback could essentially never fire,
+which is why it is absent from every screenshot of the 2026-10-05 game. Two
+faults, both mine:
+
+1. It recorded only on a cache **miss**. `league(for:)` returns early on a
+   cache hit and on an in-flight hit, so after the first lookup of a player
+   nothing was written.
+2. It compared `playerId` against `lastTickState?.batterId` — but
+   `lastTickState` is not assigned until *after* the card is built, so during
+   a lookup it still held the **previous** batter, and nil for the first of
+   the game.
+
+Fixed by splitting the cache logic into `resolvedLeague(for:)` and having
+`league(for:)` record on every call against a side the caller passes in. The
+three call sites all know which side they are asking about; `fetchSplits`
+reads it off its `group` argument ("pitching" or "hitting").
+
+**So no information about the fallback was gathered from that game.** The
+question is still entirely open: when a Fall League player's splits come back
+labelled "High-A career" over a 30 PA sample, is `league(for:)` returning 17
+(the fallback) or a real level?
