@@ -348,9 +348,14 @@ extension JSONValue {
                 parent = .array(arr)
 
             case .object(var dict):
-                guard dict.removeValue(forKey: token) != nil else {
-                    throw JSONPatchError.pathNotFound(pointer.description)
-                }
+                // Same reasoning as the array case above, and the same as the
+                // reference, whose `delete root[key]` is a no-op on a key that
+                // is not there. Throwing cost a full refetch to reach a state
+                // we were already in: a live game sent
+                // `remove /liveData/plays/currentPlay/result/rbi` against a
+                // currentPlay with no rbi, and that was the game's one hard
+                // patch failure.
+                guard dict.removeValue(forKey: token) != nil else { return }
                 parent = .object(dict)
 
             default:

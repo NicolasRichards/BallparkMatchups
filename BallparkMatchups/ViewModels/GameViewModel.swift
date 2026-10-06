@@ -49,11 +49,11 @@ final class GameViewModel: ObservableObject {
     private var baselineOPSCache: [BaselineKey: Double?] = [:]
     /// playerId -> the league their real season numbers live in. Only
     /// consulted for Fall League games; see `league(for:)`.
-    private var playerLeagueCache: [Int: Int] = [:]
+    private var playerLeagueCache: [Int: ResolvedLeague] = [:]
     /// teamId -> league. A club's level never changes mid-season.
     private var teamLeagueCache: [Int: Int] = [:]
     /// In-flight league lookups, so concurrent callers share one request.
-    private var leagueLookups: [Int: Task<Int, Never>] = [:]
+    private var leagueLookups: [Int: Task<ResolvedLeague, Never>] = [:]
     private var pitcherFirstAtBat: [Int: Int] = [:]  // pitcherId -> first atBatIndex
     private var observedPitcherEntry: Set<Int> = []  // pitchers we saw enter this session
 
@@ -69,8 +69,8 @@ final class GameViewModel: ObservableObject {
         /// Resolved league per player, batter then pitcher. 17 means the
         /// lookup fell back to the game's own league, which yields Fall League
         /// samples too small to clear the thresholds.
-        var batterLeague: Int?
-        var pitcherLeague: Int?
+        var batterLeague: String?
+        var pitcherLeague: String?
         var pushEnabled: Bool = false
         var push: PushFeedStats?
     }
@@ -753,19 +753,42 @@ final class GameViewModel: ObservableObject {
     /// *previous* batter — and nil for the first of the game.
     private enum MatchupSide { case batter, pitcher }
 
+    /// Why a league came out the way it did. A bare 17 in the overlay is
+    /// ambiguous — it is either a lookup that failed back to the game's own
+    /// league, or the correct answer for a player whose current club really is
+    /// a Fall League team — and those need opposite fixes.
+    private enum LeagueOrigin: String {
+        /// Read from the player's current team. Trustworthy.
+        case resolved = ""
+        /// The team lookup succeeded and the team is itself a Fall League
+        /// club, so the stats request is correctly scoped to a tiny sample.
+        case fallLeagueTeam = "a"
+        /// No current team on the player, so the game's league was assumed.
+        case noTeam = "p"
+        /// The team carried no sport, so the game's league was assumed.
+        case noSport = "t"
+    }
+
+    private struct ResolvedLeague: Sendable {
+        let level: Int
+        let origin: LeagueOrigin
+
+        var display: String { "\(level)\(origin.rawValue)" }
+    }
+
     private func league(for playerId: Int, side: MatchupSide) async -> Int {
         guard sportId == SportLevel.fallLeague.rawValue else { return sportId }
-        let level = await resolvedLeague(for: playerId)
+        let resolved = await resolvedLeague(for: playerId)
         // Recorded on every call, cache hits included. Recording only on a
         // miss meant the row froze on whoever was looked up first.
         switch side {
-        case .batter: debugInfo.batterLeague = level
-        case .pitcher: debugInfo.pitcherLeague = level
+        case .batter: debugInfo.batterLeague = resolved.display
+        case .pitcher: debugInfo.pitcherLeague = resolved.display
         }
-        return level
+        return resolved.level
     }
 
-    private func resolvedLeague(for playerId: Int) async -> Int {
+    private func resolvedLeague(for playerId: Int) async -> ResolvedLeague {
         if let cached = playerLeagueCache[playerId] { return cached }
         // Four call sites ask for the same batter's league at once — two
         // baselines, his splits and the head-to-head. Without this they all
@@ -774,23 +797,36 @@ final class GameViewModel: ObservableObject {
 
         let task = Task { await self.resolveLeague(for: playerId) }
         leagueLookups[playerId] = task
-        let level = await task.value
+        let resolved = await task.value
         leagueLookups[playerId] = nil
-        playerLeagueCache[playerId] = level
-        return level
+        playerLeagueCache[playerId] = resolved
+        return resolved
     }
 
     /// currentTeam -> that club's level. Either step failing falls back to the
     /// game's league rather than dropping the stat entirely.
-    private func resolveLeague(for playerId: Int) async -> Int {
+    private func resolveLeague(for playerId: Int) async -> ResolvedLeague {
         let person = try? await api.fetchPlayer(id: playerId)
-        guard let teamId = person?.people.first?.currentTeam?.id else { return sportId }
-        if let cached = teamLeagueCache[teamId] { return cached }
+        guard let teamId = person?.people.first?.currentTeam?.id else {
+            return ResolvedLeague(level: sportId, origin: .noTeam)
+        }
+        if let cached = teamLeagueCache[teamId] {
+            return ResolvedLeague(level: cached, origin: origin(for: cached))
+        }
 
         let team = try? await api.fetchTeam(id: teamId)
-        guard let level = team?.teams.first?.sport?.id else { return sportId }
+        guard let level = team?.teams.first?.sport?.id else {
+            return ResolvedLeague(level: sportId, origin: .noSport)
+        }
         teamLeagueCache[teamId] = level
-        return level
+        return ResolvedLeague(level: level, origin: origin(for: level))
+    }
+
+    /// A resolved 17 is a real answer, not a fallback — the player's club is
+    /// itself a Fall League team — but it still scopes the stats request to a
+    /// sample too small to mean anything, so it is marked.
+    private func origin(for level: Int) -> LeagueOrigin {
+        level == SportLevel.fallLeague.rawValue ? .fallLeagueTeam : .resolved
     }
 
     /// The batter's season and career OPS in this league, or nil if either

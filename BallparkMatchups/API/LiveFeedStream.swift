@@ -41,6 +41,11 @@ struct PushFeedStats: Sendable, Equatable {
     /// The message alone does not say which path, and the path is the thing
     /// that identifies the bug.
     var lastFailedOperation: String?
+    /// The last operation dropped after its retry, kept apart from
+    /// `lastFailedOperation` because a hard failure used to overwrite it —
+    /// so a game ending on `drop4` showed the one op that threw instead of
+    /// any of the four that were actually dropped.
+    var lastDroppedOperation: String?
     /// copy/move operations that failed in place but succeeded once the rest
     /// of the batch had been applied — i.e. MLB emitted them out of order.
     var deferredResolved = 0
@@ -333,7 +338,7 @@ actor LiveFeedStream {
                        case .arrayIndexOutOfBounds(_, let index, let count) = patchError {
                         note += " [idx \(index) of \(count)]"
                     }
-                    stats.lastFailedOperation = note
+                    stats.lastDroppedOperation = note
                 }
             }
 

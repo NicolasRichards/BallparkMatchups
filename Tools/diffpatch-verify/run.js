@@ -151,10 +151,36 @@ for (const [feedFile, diffFile] of [
   catch (e) { threw = true; }
   check('safety: an absurd index throws rather than allocating', threw, 'did not throw');
 
-  let threw2 = false;
-  try { mine.apply({ a: 1 }, [{ op: 'remove', path: '/missing' }]); }
-  catch (e) { threw2 = true; }
-  check('safety: removing an absent key throws', threw2, 'did not throw');
+}
+
+// Removing something that is not there.
+//
+// Seen live as `remove /liveData/plays/currentPlay/result/rbi` against a
+// currentPlay that had no rbi — the one hard patch failure of a full game,
+// costing a refetch to reach a state we were already in. The reference's
+// `delete root[key]` is a no-op, and our own array remove already was.
+{
+  const cases = [
+    ['absent key',          { a: 1 },                                           { op: 'remove', path: '/missing' }],
+    ['absent key, sibling present',
+                            { liveData: { plays: { currentPlay: { result: { description: 'Single' } } } } },
+                            { op: 'remove', path: '/liveData/plays/currentPlay/result/rbi' }],
+    ['absent intermediates', { liveData: {} },                                  { op: 'remove', path: '/liveData/plays/currentPlay/result/rbi' }],
+    ['absent array index',  { a: [1, 2] },                                      { op: 'remove', path: '/a/9' }],
+  ];
+  for (const [name, doc, op] of cases) {
+    const a = JSON.parse(JSON.stringify(doc));
+    const b = JSON.parse(JSON.stringify(doc));
+    let mineErr = null, theirErr = null;
+    try { mine.apply(a, [op]); } catch (e) { mineErr = e; }
+    try { theirs.hydrate(b, { diff: [op] }); } catch (e) { theirErr = e; }
+    check(`remove: ${name} — neither implementation throws`,
+      mineErr === null && theirErr === null,
+      `mine=${mineErr && mineErr.message} theirs=${theirErr && theirErr.message}`);
+    check(`remove: ${name} — my result === reference result`,
+      JSON.stringify(a) === JSON.stringify(b),
+      `mine=${JSON.stringify(a)} theirs=${JSON.stringify(b)}`);
+  }
 }
 
 function firstDivergence(a, b, p = '') {
