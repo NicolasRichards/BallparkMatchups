@@ -299,3 +299,57 @@ container when a later operation writes into that slot.
 never fires, but a deferred-then-dropped operation is cheap and a hard failure
 costs a full refetch and counts toward the kill switch. The deferral stays as
 a net rather than being tightened on the strength of an untested prediction.
+
+## Third full game, 2026-10-06 — the growth fix measured
+
+Salt River 7, Surprise 2. Start to finish on an iPhone, cell-only.
+
+| | before (10-05) | after (10-06) |
+|---|---|---|
+| Deferred, dropped | **51** | **4** |
+| Patch fails | 0 | 1 |
+| Patched | 292 | 396 |
+| Full refreshes | 23 | 32 |
+| Push KB vs poll estimate | 34,309 / 285,215 | 36,464 / 325,723 |
+| Saved | 88% | **89%** |
+
+The cascade is gone. What remains is four dropped operations whose paths are
+still unknown — a hard failure overwrote the record, which is now fixed by
+keeping `lastDroppedOperation` separate from `lastFailedOperation`.
+
+### The one hard failure
+
+    remove /liveData/plays/currentPlay/result/rbi
+    No value at /liveData/plays/currentPlay/result/rbi
+
+Same class as the array bounds, opposite operation. The reference's remove is
+`delete root[key]`, a no-op in JavaScript when the key is absent — and our own
+*array* remove was already a no-op, with the comment "removing an element that
+is not there has already been achieved". Only the object branch threw, costing
+a full refetch to reach a state we were already in. Now a no-op, cross-checked
+against the reference on four shapes.
+
+## The Fall League fallback: confirmed, and ambiguous
+
+The repaired `League b/p` row populated all game:
+
+| time | b/p | |
+|---|---|---|
+| 5:00 | 17/12 | batter Fall League, pitcher AA |
+| 5:11 | 13/12 | batter High-A, pitcher AA — both resolved |
+| 6:05 | 17/14 | batter Fall League, pitcher Low-A |
+| 6:44 | 17/17 | both Fall League |
+
+So 17 appears often, and 13/12 proves the lookup *can* resolve a real level.
+But a bare 17 is ambiguous and the two readings need opposite fixes:
+
+- **The lookup failed** and fell back to the game's own league (17). Fix the
+  lookup.
+- **The lookup succeeded** and the player's current club genuinely *is* a Fall
+  League team. Then the request is correctly scoped — to a sample of 30 PA,
+  which is useless. Fix would be to climb to the player's parent organisation
+  instead.
+
+`LeagueOrigin` now distinguishes them with a suffix: `17a` the club really is
+a Fall League team, `17p` no current team on the player, `17t` the team
+carried no sport, bare number resolved normally. One more game settles it.

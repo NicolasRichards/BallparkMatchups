@@ -21,8 +21,10 @@ struct DebugOverlayView: View {
             if info.batterLeague != nil || info.pitcherLeague != nil {
                 // 17 is the Fall League itself, i.e. the per-player lookup
                 // fell back and the splits are scoped to a meaningless sample.
-                row("League b/p", "\(info.batterLeague.map(String.init) ?? "-")"
-                    + "/\(info.pitcherLeague.map(String.init) ?? "-")")
+                // 17 is the Fall League itself. A trailing letter says why:
+                // a = the player's club really is a Fall League team,
+                // p = no current team on the player, t = team had no sport.
+                row("League b/p", "\(info.batterLeague ?? "-")/\(info.pitcherLeague ?? "-")")
             }
 
             Divider()
@@ -95,6 +97,13 @@ struct DebugOverlayView: View {
                 row("Poll KB est", "\(push.estimatedPollingBytes / 1024)")
                 if let op = push.lastFailedOperation {
                     Text("FAILED OP: " + op)
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundColor(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if let op = push.lastDroppedOperation {
+                    Text("DROPPED OP: " + op)
                         .font(.system(size: 8, design: .monospaced))
                         .foregroundColor(.orange)
                         .fixedSize(horizontal: false, vertical: true)

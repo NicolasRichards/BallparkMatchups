@@ -110,28 +110,20 @@ final class JSONPatchTests: XCTestCase {
 
     // MARK: Failure behaviour
 
-    /// Removing a key that was never there means the diff and the tree
-    /// disagree about the shape of the document, which no retry can fix. A
-    /// throw is the signal to refetch.
-    ///
-    /// Writing past the end of an array used to throw here too. It no longer
-    /// does — see the growth tests below for why.
-    func testRemovingAnAbsentKeyThrows() throws {
-        var b = try tree(#"{"a":1}"#)
-        let absentKey = try ops(#"[{"op":"remove","path":"/missing"}]"#)
-        XCTAssertThrowsError(try b.apply(absentKey))
-    }
+
 
     /// LiveFeedStream patches a copy and commits only on success. This is the
     /// value-semantics guarantee that makes that safe.
     func testFailedBatchLeavesTheOriginalUntouched() throws {
         let original = try tree(#"{"a":{"b":1},"arr":[1,2]}"#)
         var working = original
-        // The second operation must genuinely fail: a write past the end of
-        // an array grows it now, so it is no longer a way to abort a batch.
+        // The second operation must genuinely fail. Writing past the end of
+        // an array grows it now, and removing an absent key is a no-op, so
+        // neither aborts a batch any more. A copy whose source does not exist
+        // still throws, and is a shape that turns up live.
         let halfBad = try ops(#"""
         [{"op":"replace","path":"/a/b","value":2},
-         {"op":"remove","path":"/nope"}]
+         {"op":"copy","from":"/nope","path":"/a/c"}]
         """#)
         XCTAssertThrowsError(try working.apply(halfBad))
         XCTAssertEqual(try value(original, "/a/b"), .int(1), "original must not be mutated")
@@ -161,10 +153,22 @@ final class JSONPatchTests: XCTestCase {
 
     /// A missing object key is still an error — that is a real desync, not
     /// a state we are already in.
-    func testRemovingAnAbsentObjectKeyStillThrows() throws {
+    /// Removing a key that is not there has already been achieved, exactly as
+    /// for an array index. This used to throw, and that was the one hard patch
+    /// failure of a full game: MLB sent
+    /// `remove /liveData/plays/currentPlay/result/rbi` against a currentPlay
+    /// with no rbi, and we spent a full refetch reaching a state we were
+    /// already in. The reference's `delete root[key]` is a no-op.
+    func testRemovingAnAbsentObjectKeyIsANoOp() throws {
         var doc = try tree(#"{"a":1}"#)
-        let absent = try ops(#"[{"op":"remove","path":"/missing"}]"#)
-        XCTAssertThrowsError(try doc.apply(absent))
+        try doc.apply(ops(#"[{"op":"remove","path":"/missing"}]"#))
+        XCTAssertEqual(try value(doc, "/a"), .int(1))
+
+        // Captured verbatim: the sibling must survive untouched.
+        var live = try tree(#"{"liveData":{"plays":{"currentPlay":{"result":{"description":"Single"}}}}}"#)
+        try live.apply(ops(#"[{"op":"remove","path":"/liveData/plays/currentPlay/result/rbi"}]"#))
+        XCTAssertEqual(
+            try value(live, "/liveData/plays/currentPlay/result/description"), .string("Single"))
     }
 
 

@@ -97,8 +97,7 @@ function removeValue(root, tokens, fullPath) {
     if (i < 0 || i >= parent.length) return;   // already absent — no-op
     parent.splice(i, 1);
   } else if (parent !== null && typeof parent === 'object') {
-    if (!(leaf in parent)) throw new PatchError('pathNotFound ' + fullPath);
-    delete parent[leaf];
+    delete parent[leaf];   // absent key: a no-op, as in the reference
   } else throw new PatchError('notTraversable ' + fullPath);
 }
 
