@@ -294,32 +294,25 @@ extension JSONValue {
                 guard let i = Int(token) else {
                     throw JSONPatchError.notTraversable(pointer.description)
                 }
-                if insert {
-                    // RFC 6902: index may equal count (append) but not exceed it.
-                    // Every array add observed in captured MLB traffic is an
-                    // append; the insert branch is here for spec conformance.
-                    guard i >= 0, i <= arr.count else {
-                        throw JSONPatchError.arrayIndexOutOfBounds(
-                            path: pointer.description, index: i, count: arr.count
-                        )
-                    }
+                guard i >= 0 else {
+                    throw JSONPatchError.arrayIndexOutOfBounds(
+                        path: pointer.description, index: i, count: arr.count
+                    )
+                }
+                if insert, i < arr.count {
+                    // An in-bounds `add` is a true insert, per RFC 6902.
                     arr.insert(newValue, at: i)
-                } else if i == arr.count {
-                    // MLB uses `replace` where the spec would require `add`:
-                    // live traffic sends `replace /metaData/gameEvents/0`
-                    // against an array we hold empty, several times a game.
-                    // The reference implementation assigns by index and
-                    // JavaScript grows the array, so this has always worked
-                    // for it. Appending at exactly count matches that without
-                    // allowing a hole to be punched further out.
-                    arr.append(newValue)
                 } else {
-                    guard arr.indices.contains(i) else {
-                        throw JSONPatchError.arrayIndexOutOfBounds(
-                            path: pointer.description, index: i, count: arr.count
-                        )
-                    }
-                    arr[i] = newValue
+                    // At or past the end, MLB means "assign at this index".
+                    // Its stream is not RFC 6902 — the reference writes
+                    // `root[accessor] = value` and lets JavaScript grow the
+                    // array, filling the gap with holes that serialise as
+                    // null. Refusing the write instead left us one element
+                    // short of the server for the rest of the game, and every
+                    // later operation on the same array failed too: one live
+                    // game dropped 51 operations behind a single short array.
+                    try JSONValue.grow(&arr, to: i, path: pointer.description)
+                    if i < arr.count { arr[i] = newValue } else { arr.append(newValue) }
                 }
                 parent = .array(arr)
 
@@ -420,18 +413,19 @@ extension JSONValue {
             node = .object(dict)
 
         case .array(var arr):
-            // An index one past the end is a container this diff is building:
             // MLB introduces a subtree one leaf at a time, so the element we
-            // need to descend into may not exist yet. Anything beyond that is a
-            // real gap — throw, and let the caller refetch rather than write a
-            // hole into the tree.
-            guard let i = Int(token), i >= 0, i <= arr.count else {
+            // need to descend into may not exist yet — and it can be well past
+            // the end, not merely one short. The reference assigns straight
+            // into the index and lets JavaScript grow the array, so grow it
+            // here too rather than refusing to descend.
+            guard let i = Int(token), i >= 0 else {
                 throw JSONPatchError.arrayIndexOutOfBounds(
                     path: fullPath,
                     index: Int(token) ?? -1,
                     count: arr.count
                 )
             }
+            try JSONValue.grow(&arr, to: i, path: fullPath)
             if i == arr.count {
                 arr.append(emptyContainer(for: childShapeHint))
             }
@@ -465,5 +459,27 @@ extension JSONValue {
 
     private static func emptyContainer(for nextToken: String) -> JSONValue {
         Int(nextToken) != nil ? .array([]) : .object([:])
+    }
+
+    /// The largest gap an operation may open in an array.
+    ///
+    /// Growing to whatever index arrives is what keeps us in step with the
+    /// server, but the index comes off the network: a corrupt frame naming
+    /// index 2_000_000_000 would otherwise allocate until the app died. No
+    /// real feed array comes close to this — a nine-inning game runs to a few
+    /// hundred plays — so anything beyond it is a bad frame, and throwing
+    /// makes the caller refetch.
+    private static let maxArrayGap = 10_000
+
+    /// Pads `arr` with nulls until `index` is writable, matching the holes
+    /// JavaScript leaves when the reference assigns past the end.
+    private static func grow(_ arr: inout [JSONValue], to index: Int, path: String) throws {
+        guard index > arr.count else { return }
+        guard index - arr.count <= maxArrayGap else {
+            throw JSONPatchError.arrayIndexOutOfBounds(
+                path: path, index: index, count: arr.count
+            )
+        }
+        arr.append(contentsOf: repeatElement(.null, count: index - arr.count))
     }
 }

@@ -325,8 +325,15 @@ actor LiveFeedStream {
                     // about/captivatingIndex, are ones the typed model never
                     // decodes. Counted so the trade stays visible.
                     stats.droppedOperations += 1
-                    stats.lastFailedOperation =
-                        "dropped \(operation.op.rawValue) \(operation.path)"
+                    var note = "dropped \(operation.op.rawValue) \(operation.path)"
+                    // Which array was short, and by how much, is what
+                    // identifies the cause — the path alone names only the
+                    // leaf, which is rarely the level that actually failed.
+                    if let patchError = error as? JSONPatchError,
+                       case .arrayIndexOutOfBounds(_, let index, let count) = patchError {
+                        note += " [idx \(index) of \(count)]"
+                    }
+                    stats.lastFailedOperation = note
                 }
             }
 

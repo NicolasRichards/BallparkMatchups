@@ -183,19 +183,84 @@ final class JSONPatchTests: XCTestCase {
     /// operation in the same batch fills the gap. Captured live, five times in
     /// one Fall League game: `replace /metaData/logicalEvents/2` against an
     /// array holding a single element.
-    func testOutOfBoundsReplaceIsRetriedNotFatal() throws {
+    /// Writing past the end of an array grows it, filling the gap with nulls.
+    ///
+    /// This used to throw, which was the bug: the array stayed short, so every
+    /// later operation indexed into it failed too. One live game dropped 51
+    /// operations behind a single short array. The reference implementation
+    /// assigns straight into the index — `root[accessor] = value` — and
+    /// JavaScript grows the array, leaving holes that serialise as null, so
+    /// this is what the server's stream has always been written against.
+    func testReplacePastTheEndGrowsTheArray() throws {
         var doc = try tree(#"{"metaData":{"logicalEvents":["countChange"]}}"#)
-        let outOfOrder = try ops(#"[{"op":"replace","path":"/metaData/logicalEvents/2","value":"count13"}]"#)
-        XCTAssertThrowsError(try doc.apply(outOfOrder))
-
-        // Applied after the gap is filled, the same operation lands.
-        var filled = try tree(#"{"metaData":{"logicalEvents":["countChange"]}}"#)
-        try filled.apply(ops(#"[{"op":"add","path":"/metaData/logicalEvents/1","value":"basesEmpty"}]"#))
-        try filled.apply(outOfOrder)
+        try doc.apply(ops(#"[{"op":"replace","path":"/metaData/logicalEvents/2","value":"count13"}]"#))
         XCTAssertEqual(
-            try value(filled, "/metaData/logicalEvents"),
-            .array([.string("countChange"), .string("basesEmpty"), .string("count13")])
+            try value(doc, "/metaData/logicalEvents"),
+            .array([.string("countChange"), .null, .string("count13")])
         )
+    }
+
+    /// Captured verbatim off a live Fall League game, where it was dropped.
+    func testAddPastTheEndGrowsTheArray() throws {
+        var doc = try tree(#"{"metaData":{"logicalEvents":["countChange"]}}"#)
+        try doc.apply(ops(#"[{"op":"add","path":"/metaData/logicalEvents/4","value":"count12"}]"#))
+        XCTAssertEqual(
+            try value(doc, "/metaData/logicalEvents"),
+            .array([.string("countChange"), .null, .null, .null, .string("count12")])
+        )
+    }
+
+    /// The same gap can open in the middle of a path, not just at its leaf —
+    /// `add /liveData/plays/allPlays/82/playEvents/8/...` against an array
+    /// that is short. Descending has to grow it too.
+    func testDescendingPastTheEndGrowsTheArray() throws {
+        var doc = try tree(#"{"a":[{"b":1}]}"#)
+        try doc.apply(ops(#"[{"op":"add","path":"/a/3/b","value":2}]"#))
+        XCTAssertEqual(try value(doc, "/a/3/b"), .int(2))
+        XCTAssertEqual(try value(doc, "/a/1"), JSONValue.null)
+        guard case .array(let arr)? = try value(doc, "/a") else {
+            return XCTFail("expected an array")
+        }
+        XCTAssertEqual(arr.count, 4)
+    }
+
+    /// An in-bounds `add` is still a true insert, per RFC 6902. This is the
+    /// one place the behaviour deliberately differs from the reference's
+    /// plain assignment, and nothing in the captured traffic exercises it.
+    func testInBoundsAddStillInserts() throws {
+        var doc = try tree(#"{"arr":["a","b","c"]}"#)
+        try doc.apply(ops(#"[{"op":"add","path":"/arr/1","value":"x"}]"#))
+        XCTAssertEqual(
+            try value(doc, "/arr"),
+            .array([.string("a"), .string("x"), .string("b"), .string("c")])
+        )
+    }
+
+    /// The index arrives off the network. A gap no real feed could produce is
+    /// a corrupt frame, and must not be met by allocating until the app dies.
+    func testAnAbsurdIndexThrowsRatherThanAllocating() throws {
+        var doc = try tree(#"{"arr":[]}"#)
+        XCTAssertThrowsError(
+            try doc.apply(ops(#"[{"op":"add","path":"/arr/2000000000","value":1}]"#))
+        )
+    }
+
+    /// A null hole must not take the whole feed down with it: the two decoded
+    /// arrays in the live feed hold optional elements for exactly this reason.
+    func testAFeedWithHolesStillDecodes() throws {
+        var doc = try tree(#"""
+        {"metaData":{"timeStamp":"20261005_190000"},
+         "gameData":{"status":{"detailedState":"In Progress"},
+                     "teams":{"home":{"name":"Desert Dogs"},"away":{"name":"Rafters"}}},
+         "liveData":{"plays":{"allPlays":[{"result":{"description":"Groundout"},
+                                           "about":{"isComplete":true}}]}}}
+        """#)
+        try doc.apply(ops(#"[{"op":"add","path":"/liveData/plays/allPlays/3/about/isComplete","value":true}]"#))
+        let feed = try doc.decoded(as: LiveFeedResponse.self)
+        let plays = feed.liveData?.plays?.allPlays
+        XCTAssertEqual(plays?.count, 4)
+        XCTAssertNil(plays?[1] ?? nil)
+        XCTAssertEqual(plays?.compactMap({ $0 }).first?.result?.description, "Groundout")
     }
 
     // MARK: Round trip

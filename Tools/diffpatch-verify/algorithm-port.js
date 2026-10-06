@@ -30,6 +30,17 @@ function valueAt(root, tokens) {
   return node;
 }
 
+// Mirrors `JSONValue.grow` — pads with explicit nulls up to `index`.
+// JavaScript holes stringify as null anyway, so the reference's `arr[9] = v`
+// and this produce identical JSON.
+const MAX_ARRAY_GAP = 10000;
+function grow(arr, index, fullPath) {
+  if (index <= arr.length) return;
+  if (index - arr.length > MAX_ARRAY_GAP)
+    throw new PatchError(`arrayIndexOutOfBounds ${fullPath} idx=${index} count=${arr.length}`);
+  while (arr.length < index) arr.push(null);
+}
+
 // Mirrors `descend` — returns the parent container, creating missing intermediates.
 function descend(root, path, nextTokenAfterPath, fullPath) {
   let node = root;
@@ -38,8 +49,9 @@ function descend(root, path, nextTokenAfterPath, fullPath) {
     const childShapeHint = (k + 1 < path.length) ? path[k + 1] : nextTokenAfterPath;
     if (Array.isArray(node)) {
       const i = Number(token);
-      if (!Number.isInteger(i) || i < 0 || i > node.length)
+      if (!Number.isInteger(i) || i < 0)
         throw new PatchError(`arrayIndexOutOfBounds ${fullPath} idx=${token} count=${node.length}`);
+      grow(node, i, fullPath);
       if (i === node.length) node.push(emptyContainer(childShapeHint));
       node = node[i];
     } else if (node !== null && typeof node === 'object') {
@@ -59,16 +71,15 @@ function setValue(root, tokens, newValue, insert, fullPath) {
   if (Array.isArray(parent)) {
     const i = Number(leaf);
     if (!Number.isInteger(i)) throw new PatchError('notTraversable ' + fullPath);
-    if (insert) {
-      if (i < 0 || i > parent.length)
-        throw new PatchError(`arrayIndexOutOfBounds ${fullPath} idx=${i} count=${parent.length}`);
-      parent.splice(i, 0, newValue);
-    } else if (i === parent.length) {
-      parent.push(newValue);          // MLB replaces where the spec wants add
+    if (i < 0)
+      throw new PatchError(`arrayIndexOutOfBounds ${fullPath} idx=${i} count=${parent.length}`);
+    if (insert && i < parent.length) {
+      parent.splice(i, 0, newValue);  // in-bounds add is a true insert
     } else {
-      if (i < 0 || i >= parent.length)
-        throw new PatchError(`arrayIndexOutOfBounds ${fullPath} idx=${i} count=${parent.length}`);
-      parent[i] = newValue;
+      // At or past the end MLB means "assign here"; the reference lets
+      // JavaScript grow the array, leaving holes that stringify as null.
+      grow(parent, i, fullPath);
+      if (i < parent.length) parent[i] = newValue; else parent.push(newValue);
     }
   } else if (parent !== null && typeof parent === 'object') {
     parent[leaf] = newValue;

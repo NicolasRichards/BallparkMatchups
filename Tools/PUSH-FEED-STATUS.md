@@ -237,3 +237,65 @@ behaviour that shipped before.
 `PollSchedule.interval` was lifted out of `GameViewModel` for this, purely so
 the decision is testable without a live game — `PollScheduleTests` covers all
 three paths above plus every interval that must not have changed.
+
+## The dropped operations, 2026-10-05
+
+A second full Fall League game, cell-only, screen awake. The end-of-game fix
+held — `FINAL` appeared promptly on the last out, with the loop at 5s and the
+socket down. But the overlay ended on `Deferred: ok1 drop51`, with the last
+failure reading:
+
+    dropped add /liveData/plays/allPlays/82/playEvents/8/pitchData/breaks/spinDirection
+
+Earlier screenshots in the same game showed `add /metaData/logicalEvents/4`,
+`replace /metaData/logicalEvents/1` and `add /metaData/logicalEvents/3`.
+
+### Cause
+
+Our applier enforced RFC 6902 bounds. **MLB's diffPatch stream is not RFC
+6902.** The reference implementation's entire leaf write is:
+
+```js
+root[currentAccessor] = value;     // for BOTH add and replace
+```
+
+Plain assignment. In JavaScript `arr[5] = v` on a two-element array simply
+grows it, leaving holes that stringify as `null`. Its traversal does the same:
+`if (root[accessor] === undefined) root[accessor] = {}` — at any index, however
+far past the end. The author says so outright in the module comment: *"the JSON
+paths diffPatch give me are not guaranteed to point to defined values."*
+
+So the server has always been written against assignment semantics. Refusing
+the write left our array one element short of the server's — and then **every
+later operation indexed into that array failed too**. That is the cascade: one
+short array, 51 dropped operations.
+
+### Fix
+
+`JSONValue.grow` pads with nulls up to the index, in both the leaf write and
+the path traversal, so an out-of-range write grows the array instead of
+throwing. Byte-for-byte identical to the reference on every case, including
+the exact `logicalEvents/4` shape seen live — `Tools/diffpatch-verify` now
+runs each one through **both** implementations and compares.
+
+Three consequences worth knowing:
+
+- An in-bounds `add` is still a true insert (RFC 6902). This is the one place
+  we deliberately differ from the reference's plain assignment, and nothing in
+  the captured traffic exercises it.
+- The two decoded arrays in the live feed — `allPlays` and `boxscore…pitchers`
+  — now hold **optional** elements. A null hole would otherwise throw during
+  decode and fail the whole feed, which would have been worse than the drop.
+- Padding is capped at 10,000. The index arrives off the network; a corrupt
+  frame naming index 2,000,000,000 must not be met by allocating until the app
+  dies. Beyond the cap it throws, and the caller refetches.
+
+Holes self-heal: `descend` already replaces a null placeholder with a real
+container when a later operation writes into that slot.
+
+### Not fixed, deliberately
+
+`isWorthRetrying` still defers `arrayIndexOutOfBounds`. Growth should mean it
+never fires, but a deferred-then-dropped operation is cheap and a hard failure
+costs a full refetch and counts toward the kill switch. The deferral stays as
+a net rather than being tightened on the strength of an untested prediction.
