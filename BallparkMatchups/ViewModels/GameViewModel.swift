@@ -65,6 +65,16 @@ final class GameViewModel: ObservableObject {
         var requestCount: Int = 0
         var candidateSplits: Int = 0
         var shownSplits: Int = 0
+        /// The largest split response seen this session, before the PA
+        /// threshold is applied, and the largest sample in any of them.
+        ///
+        /// `Candidates` counts splits that already cleared 15 PA (25 for
+        /// career), so a zero there cannot distinguish "MLB served rows and
+        /// they were all too small" from "MLB served nothing for this
+        /// league". For the Fall League those need completely different
+        /// answers, so count the rows before the filter too.
+        var rawSplitRows: Int = 0
+        var rawSplitMaxPA: Int = 0
         var lastRefreshKind: String = "-"
         /// Resolved league per player, batter then pitcher. 17 means the
         /// lookup fell back to the game's own league, which yields Fall League
@@ -925,6 +935,13 @@ final class GameViewModel: ObservableObject {
                 : try await api.fetchSplits(playerId: playerId, sitCodes: codes, group: group, season: season, sportId: playerLeague)
             let careerLabel = careerScope(in: playerLeague)
             let scope = isCareer ? careerLabel : season.map { String($0) } ?? careerLabel
+            let rawRows = resp.stats.flatMap(\.splits)
+            let rawPA = rawRows.compactMap { $0.stat.plateAppearances ?? $0.stat.battersFaced }
+            // Running maxima: one screenshot at any point in a game then
+            // answers whether this league serves split data at all.
+            debugInfo.rawSplitRows = max(debugInfo.rawSplitRows, rawRows.count)
+            debugInfo.rawSplitMaxPA = max(debugInfo.rawSplitMaxPA, rawPA.max() ?? 0)
+
             let lines = resp.toSplitLines(scope: scope, isCareer: isCareer, minPA: minPA)
             if isCareer {
                 for line in lines {

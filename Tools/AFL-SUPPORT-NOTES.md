@@ -195,3 +195,39 @@ reads it off its `group` argument ("pitching" or "hitting").
 question is still entirely open: when a Fall League player's splits come back
 labelled "High-A career" over a 30 PA sample, is `league(for:)` returning 17
 (the fallback) or a real level?
+
+## Possible change of direction: show Fall League numbers, not season numbers
+
+Nick, 2026-10-07: *"the AFL is hardly the most stats-driven league. I'm
+almost OK with ditching the season-long stats and just show what they have
+done so far in the AFL. The first week that will be meaninglessly small, but
+week by week it will show more and more how that player is doing… in the AFL
+itself."*
+
+That is coherent, and it would make the code **smaller**: for `sportId 17`
+always scope to 17, and the whole per-player `league(for:)` chain —
+player → team → sport, two caches, the in-flight dedup and the `League b/p`
+row — goes away, along with two API calls per player.
+
+### The question that decides it
+
+Every screenshot of the 10-06 late game, where both sides read `17a`, showed
+**`Candidates: 0`**. But `candidateSplits` counts splits that have *already*
+passed the PA threshold (`minPA = isCareer ? 25 : 15`, applied inside
+`toSplitLines`), so a zero there cannot tell these apart:
+
+1. **MLB served rows and they were all under the threshold.** Then the idea
+   works and the thresholds need lowering for the Fall League — early weeks
+   would show a `(6 PA)` line, growing as the league goes on, which is
+   exactly what was asked for.
+2. **MLB served nothing for sportId 17.** Then no threshold change helps,
+   `statSplits` does not cover this league, and showing Fall League numbers
+   would mean computing them from the games themselves. A much bigger job,
+   and probably not worth it for six weeks a year.
+
+`Raw splits: N rows · max P PA` in the overlay now answers this. Both are
+running maxima over the session, so a single screenshot from any point in a
+game is enough. Zero rows is case 2. Any rows at all is case 1, and `max P`
+says where the threshold would have to sit.
+
+Nothing else should be built until that row has been read.
