@@ -18,6 +18,13 @@ struct DebugOverlayView: View {
             row("Candidates", "\(info.candidateSplits)")
             row("Shown splits", "\(info.shownSplits)")
             row("Last refresh", info.lastRefreshKind)
+            if info.rawSplitRows > 0 || info.rawSplitMaxPA > 0 {
+                // Rows the API returned before the 15/25 PA threshold, and the
+                // biggest sample among them. Zero rows means the league serves
+                // no splits at all; rows with a small max means the threshold
+                // is what is hiding them.
+                row("Raw splits", "\(info.rawSplitRows) rows · max \(info.rawSplitMaxPA) PA")
+            }
             if info.batterLeague != nil || info.pitcherLeague != nil {
                 // 17 is the Fall League itself, i.e. the per-player lookup
                 // fell back and the splits are scoped to a meaningless sample.
