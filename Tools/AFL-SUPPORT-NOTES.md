@@ -99,6 +99,14 @@ Three findings from opening day, all confirmed against the live service:
   (828987) reads `Rome Emperors` (id 432, `parentOrgId` 144) while actually
   pitching for the Glendale Desert Dogs. This was the one thing that could
   have killed the approach, and it held.
+
+  > **Corrected 2026-10-07.** It holds for *some* players, not all. The
+  > 10-06 game resolved a matchup to `13/12` — two real MiLB levels — but the
+  > 10-06 late game read `17a/17a` on both sides, meaning `currentTeam` for
+  > those players *was* the Fall League club. So the field is inconsistent
+  > player to player, and any fix has to handle both. Whether it tracks an
+  > active AFL roster assignment, or simply updates at different times for
+  > different players, is not established.
 - **`hydrate=currentTeam(sport)` does not work.** MLB silently ignores the
   nested hydrate and returns a payload identical to plain `currentTeam` — no
   error, just no `sport`. So the level cannot come free from the call the app
