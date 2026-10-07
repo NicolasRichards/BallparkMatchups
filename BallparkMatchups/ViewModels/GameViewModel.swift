@@ -119,10 +119,22 @@ final class GameViewModel: ObservableObject {
                 await self.poll()
                 let interval = self.nextInterval()
                 guard interval.isFinite else { return }  // game over — stop the loop
+                self.currentPollInterval = interval
                 self.debugInfo.pollingInterval = interval
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             }
         }
+    }
+
+    /// Records that the game is over and gets the poll loop looking for the
+    /// final now, rather than at the end of a sleep sized for a game still in
+    /// progress. A one-way latch — nothing clears it.
+    private func noteGameOver() {
+        guard !gameEndAnnounced else { return }
+        gameEndAnnounced = true
+        // A poll already running recomputes its own interval as it unwinds.
+        // Only a discovery from the socket needs the loop restarted.
+        if !pollInFlight { beginPollLoop() }
     }
 
     func stopPolling() {
@@ -212,6 +224,10 @@ final class GameViewModel: ObservableObject {
     // MARK: - Poll
 
     private var pollInFlight = false
+    /// The interval the poll loop is currently sleeping on. Read when a feed
+    /// arrives on the socket, to notice that the card now wants checking
+    /// sooner than the sleep already under way allows.
+    private var currentPollInterval: TimeInterval = 12
 
     private func poll() async {
         guard !pollInFlight else { return }
@@ -268,6 +284,15 @@ final class GameViewModel: ObservableObject {
         } onCancel: {
             task.cancel()
         }
+
+        // The socket can change the card in the middle of the poll loop's
+        // sleep, leaving it waiting out an interval sized for the state
+        // before. That is most of a minute of a stale card, and it is how a
+        // game ending in the 10th kept saying "coming to bat". A poll
+        // recomputes on its own as it unwinds, so this is only for push.
+        guard !pollInFlight else { return }
+        let wanted = nextInterval()
+        if wanted.isFinite, wanted < currentPollInterval { beginPollLoop() }
     }
 
     private func processFeedInOrder(_ feed: LiveFeedResponse) async {
@@ -395,11 +420,12 @@ final class GameViewModel: ObservableObject {
             let homeRuns = linescore.teams?.home.runs ?? 0
             let awayRuns = linescore.teams?.away.runs ?? 0
 
-            // Last scheduled inning or later with home team leading: game is over
-            // regardless of whether it's Middle (top half done, home doesn't need
-            // to bat) or End (bottom half done, home already won). Don't show
-            // between-innings.
-            if inning >= scheduledInnings && homeRuns > awayRuns {
+            if GameCompletion.isOver(inning: inning,
+                                     inningState: inningState,
+                                     scheduledInnings: scheduledInnings,
+                                     homeRuns: homeRuns,
+                                     awayRuns: awayRuns) {
+                noteGameOver()
                 return
             }
 

@@ -353,3 +353,55 @@ But a bare 17 is ambiguous and the two readings need opposite fixes:
 `LeagueOrigin` now distinguishes them with a suffix: `17a` the club really is
 a Fall League team, `17p` no current team on the player, `17t` the team
 carried no sport, bare number resolved normally. One more game settles it.
+
+## Fourth full game, 2026-10-06 — extra innings
+
+Glendale vs Mesa, went to the 10th+. Cell-only, start to finish.
+
+**The remove fix held: `Patch fails: 0` all game, and no `FAILED OP` line.**
+`DROPPED OP` now reports separately and showed what the drops actually are:
+
+    dropped copy /liveData/plays/currentPlay/pitchIndex/3
+
+`drop2` over the whole game, on a path the typed model never decodes. The
+destination cannot be out of bounds any more, so this is a `copy` whose
+*source* was missing both on the first pass and on the retry. Left alone:
+two operations a game on an undecoded path is not worth a refetch each.
+
+### Extra innings sat on "coming to bat"
+
+End of the 10th, Glendale 4 Mesa 3 — and the card read "(GDD coming to bat)"
+for about two minutes. Two separate causes:
+
+1. **The completion check only ended a game when the *home* team led.** At
+   `inningState == "End"` the bottom half is complete, so *either* team's
+   lead ends it. Nick's own phrasing was the rule: past the last scheduled
+   inning, an inning that ends in a non-tie ends the game. Now
+   `GameCompletion.isOver`, with a truth table covering End vs Middle, each
+   team leading, ties, short games and mid-inning states.
+
+2. **A push-driven state change waited out a sleep sized for the old state.**
+   The loop computed 60s while the card was live, the socket then flipped it
+   to between-innings mid-sleep, and nothing recomputed until the sleep
+   ended. `processFeed` now compares the wanted interval against the one the
+   loop is actually sleeping on and restarts the loop when it has got
+   shorter. Only for the push path — a poll recomputes as it unwinds.
+
+## The Fall League fallback: answered
+
+The suffix settled it. Both sides read **`17a`** all game.
+
+`a` means the team lookup **succeeded** and the player's current club really
+is a Fall League team. So `league(for:)` is not broken, and there is nothing
+to fix in it: MLB genuinely reports these players as Glendale Desert Dogs,
+a sportId 17 club. The request is then correctly scoped to the Fall League —
+to a sample of ~30 PA, which is what makes the card read "Fall League career"
+over numbers that mean nothing.
+
+The fix is therefore a different one: when the resolved league is 17, climb
+to the player's parent organisation and scope the stats there instead. How to
+get that from the API is **not yet established** — an AFL club has no single
+parent org, so `parentOrgId` on the team will not do it. Candidates worth
+checking against the live API: the player's `yearByYear` or season splits
+across sports, picking the level with the most plate appearances this season.
+Not attempted here: this environment has no route to statsapi.mlb.com.
