@@ -9,10 +9,13 @@ import XCTest
 /// as the league goes on.
 final class SplitThresholdsTests: XCTestCase {
 
-    func testTheFallLeagueCareerCutoffIsTen() {
-        XCTAssertEqual(
-            SplitThresholds.minPA(isCareer: true,
-                                  sportId: SportLevel.fallLeague.rawValue), 10)
+    func testBothFallLeagueCutoffsAreTen() {
+        for isCareer in [true, false] {
+            XCTAssertEqual(
+                SplitThresholds.minPA(isCareer: isCareer,
+                                      sportId: SportLevel.fallLeague.rawValue), 10,
+                "isCareer: \(isCareer)")
+        }
     }
 
     /// The 17 PA sample that prompted this would now show.
@@ -33,13 +36,21 @@ final class SplitThresholdsTests: XCTestCase {
         }
     }
 
-    /// The season cutoff is untouched, in every league including the Fall
-    /// League — only the career one was asked about.
-    func testTheSeasonCutoffIsFifteenEverywhere() {
-        for level in [SportLevel.mlb, .aaa, .aa, .highA, .lowA, .fallLeague] {
+    /// Every other league keeps 15 for the season.
+    func testEveryOtherLeagueKeepsFifteenForTheSeason() {
+        for level in [SportLevel.mlb, .aaa, .aa, .highA, .lowA] {
             XCTAssertEqual(
                 SplitThresholds.minPA(isCareer: false, sportId: level.rawValue), 15,
                 "\(level)")
         }
+    }
+
+    /// The 8 PA maximum seen five days into the 2026 Fall League is still
+    /// below the cutoff, which is intended: ten asks for more than a handful
+    /// of trips, and a line should appear within a few more games.
+    func testAnEightPlateAppearanceSplitStillDoesNotShow() {
+        XCTAssertGreaterThan(
+            SplitThresholds.minPA(isCareer: false,
+                                  sportId: SportLevel.fallLeague.rawValue), 8)
     }
 }
