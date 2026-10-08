@@ -285,3 +285,50 @@ from 89% to 80%. Both are MLB's behaviour rather than ours, but the drops
 are all the same shape as before, a `copy` whose source is missing on both
 passes, this time `/liveData/plays/currentPlay/runnerIndex/0`. Still on a
 path the typed model never decodes.
+
+## Decision, 2026-10-08: Fall League games show Fall League numbers
+
+The tagged row came back **`9 rows · max 17 PA @17 car H`**, which settles
+the open question: **`sportId` is respected.** A career request scoped to 17
+returns a genuine Fall League sample. So:
+
+- The `careerScope(in: 17)` label was never lying. The feared mislabelling
+  bug does not exist.
+- The 277 PA seen in earlier games came from players who resolved to a real
+  MiLB level, carried to the end of the game by the running maximum.
+
+Nick's call: **go Fall League only, and drop the career cutoff to 10.** The
+reasoning that decided it — a card showing a 400 PA High-A line for one
+batter and a 17 PA Fall League line for the next, both labelled "career",
+is worse than one that is uniformly small and honest.
+
+### What came out
+
+The whole per-player league chain, which existed only to find a Fall League
+player's *other* league:
+
+- `league(for:side:)`, `resolvedLeague`, `resolveLeague`, `origin(for:)`
+- `LeagueOrigin`, `ResolvedLeague`, `MatchupSide`
+- `playerLeagueCache`, `teamLeagueCache`, `leagueLookups`
+- the `League b/p` overlay row
+- `MLBAPIClient.fetchTeam` and `TeamDetailResponse`, now unreferenced
+- **two API calls per player**
+
+139 lines deleted against 9 added. Every stats request now uses the game's
+own `sportId`, which for non-Fall-League games is exactly what it already
+did — `league(for:)` returned early for them and never ran the lookup, so
+nothing outside the Fall League changes.
+
+### The threshold
+
+`SplitThresholds.minPA(isCareer:sportId:)`, a free function in Models so the
+table is testable. Fall League career is **10**; every other league keeps 25;
+the season cutoff stays 15 everywhere, Fall League included, since only the
+career one was asked about. The 17 PA sample that prompted this now shows.
+
+### Still true, and worth remembering
+
+Head-to-head will read "First meeting" nearly always. Thirty games across
+six clubs means a batter sees a given pitcher once or twice a season and a
+given reliever usually never. That is honest rather than broken, but it does
+mean the situational splits carry the card alone in Fall League games.

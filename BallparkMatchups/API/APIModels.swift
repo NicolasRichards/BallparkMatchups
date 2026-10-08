@@ -392,22 +392,6 @@ struct StatsResponse: Codable {
 
 // MARK: - Player Response
 
-/// `/api/v1/teams/{id}`. Only the league is wanted: a team's level is the
-/// one reliable way to learn which league a Fall League player's real season
-/// numbers live in.
-struct TeamDetailResponse: Codable {
-    let teams: [TeamDetail]
-
-    struct TeamDetail: Codable {
-        let id: Int
-        let sport: SportRef?
-
-        struct SportRef: Codable {
-            let id: Int
-        }
-    }
-}
-
 struct PlayerResponse: Codable {
     let people: [PersonDetail]
 

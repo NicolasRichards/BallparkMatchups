@@ -26,15 +26,6 @@ struct DebugOverlayView: View {
                 row("Raw splits", "\(info.rawSplitRows) rows · max \(info.rawSplitMaxPA) PA "
                     + info.rawSplitSource)
             }
-            if info.batterLeague != nil || info.pitcherLeague != nil {
-                // 17 is the Fall League itself, i.e. the per-player lookup
-                // fell back and the splits are scoped to a meaningless sample.
-                // 17 is the Fall League itself. A trailing letter says why:
-                // a = the player's club really is a Fall League team,
-                // p = no current team on the player, t = team had no sport.
-                row("League b/p", "\(info.batterLeague ?? "-")/\(info.pitcherLeague ?? "-")")
-            }
-
             Divider()
                 .overlay(Color.green.opacity(0.4))
                 .padding(.vertical, 2)
