@@ -231,3 +231,57 @@ game is enough. Zero rows is case 2. Any rows at all is case 1, and `max P`
 says where the threshold would have to sit.
 
 Nothing else should be built until that row has been read.
+
+## Raw splits read, 2026-10-07 — and the question it raises
+
+Peoria at Scottsdale, full game. Both sides read `17a` on every screenshot.
+
+    Raw splits: 11 rows · max 277 PA
+
+So **`statSplits` does serve rows for these players** — this is not case 2.
+At 10:15 PM, mid at-bat, the card had `Candidates: 4`, `Shown splits: 1`.
+(The zeros in the other screenshots are between-innings, where there is no
+matchup to count, not evidence of missing data.)
+
+But **277 PA cannot be a Fall League sample.** Thirty games a season, so a
+regular might reach 120 PA, and these are prospects rarely in their second
+Fall League. Two readings, and the running max as first built cannot tell
+them apart:
+
+1. **`sportId` is not constraining the request.** Then the numbers on the
+   card are broader than the Fall League, and the label `careerScope(in: 17)`
+   puts "Fall League career" over them. That is not a small sample, it is a
+   **wrong label** — a worse bug than the one being chased.
+2. **The 277 came from a player who resolved to a real MiLB level** earlier
+   in the game. `League b/p` only shows the most recent pair, so an earlier
+   `13` or `12` would not be visible by the end.
+
+The max observation is now tagged with the request that produced it —
+`@17 car P` for league, season-or-career, and hitting-or-pitching. `@17`
+settles it as case 1; anything else as case 2.
+
+That is the third refinement of this instrument. The first never fired, the
+second was ambiguous. Read the tag before drawing any conclusion from the
+number.
+
+## Game numbers, 2026-10-07
+
+| | |
+|---|---|
+| Patched | 478 |
+| Full refreshes | 33 |
+| Patch fails | **0** |
+| `sv` / `tc` / `ob` | 32 / 0 / 99 |
+| Deferred | ok0 **drop14** |
+| Push KB vs poll estimate | 83,977 / 420,504 |
+| Saved | **80%** |
+
+End of game flipped to FINAL promptly, at a 5s interval. No `FAILED OP` for
+the second game running.
+
+`drop14` is up from 2 and 4, and `ob99` is high — ninety-nine whole-object
+responses against 478 patches, which is also what pushed the saving down
+from 89% to 80%. Both are MLB's behaviour rather than ours, but the drops
+are all the same shape as before, a `copy` whose source is missing on both
+passes, this time `/liveData/plays/currentPlay/runnerIndex/0`. Still on a
+path the typed model never decodes.
