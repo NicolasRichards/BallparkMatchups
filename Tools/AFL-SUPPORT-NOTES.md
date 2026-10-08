@@ -342,3 +342,33 @@ Head-to-head will read "First meeting" nearly always. Thirty games across
 six clubs means a batter sees a given pitcher once or twice a season and a
 given reliever usually never. That is honest rather than broken, but it does
 mean the situational splits carry the card alone in Fall League games.
+
+## Confirmed working, 2026-10-09
+
+Peoria at Glendale. Two batters, one inning apart, both with
+`Shown splits: 1` and a real line on the card:
+
+| batter | split | line | sample |
+|---|---|---|---|
+| Caleb Bonemer | VS RIGHT | .417 / .462 / .583 | 13 PA |
+| Chase Harlan | TWO STRIKES | .000 / .200 / .000 | 10 PA |
+
+Both labelled **"AFL career"**, both scoped to sportId 17, both honest. The
+cutoff is doing real work rather than merely being lower: at the old career
+threshold of 25 neither would have shown, and at the old season threshold of
+15 neither would either. Harlan's line sits exactly on 10.
+
+`Raw splits: 11 rows · max 17 PA @17 car H` alongside, so the API ceiling
+and what reaches the card now agree.
+
+This closes the Fall League thread. The sequence that got here, for the
+record: the splits looked broken → the per-player league lookup looked
+broken → the lookup was fine and `currentTeam` was inconsistent → the
+inconsistency did not matter once the decision was to show Fall League
+numbers → the only real blocker was a threshold tuned for a 600 PA season.
+Three instruments were built and two of them were wrong before the third
+one measured the thing that mattered.
+
+Still true and not worth fixing: head-to-head reads "First meeting" nearly
+always, because thirty games across six clubs means a batter sees a given
+pitcher once or twice a season.
