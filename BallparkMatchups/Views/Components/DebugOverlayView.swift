@@ -23,7 +23,8 @@ struct DebugOverlayView: View {
                 // biggest sample among them. Zero rows means the league serves
                 // no splits at all; rows with a small max means the threshold
                 // is what is hiding them.
-                row("Raw splits", "\(info.rawSplitRows) rows · max \(info.rawSplitMaxPA) PA")
+                row("Raw splits", "\(info.rawSplitRows) rows · max \(info.rawSplitMaxPA) PA "
+                    + info.rawSplitSource)
             }
             if info.batterLeague != nil || info.pitcherLeague != nil {
                 // 17 is the Fall League itself, i.e. the per-player lookup

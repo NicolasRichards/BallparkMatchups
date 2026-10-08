@@ -75,6 +75,13 @@ final class GameViewModel: ObservableObject {
         /// answers, so count the rows before the filter too.
         var rawSplitRows: Int = 0
         var rawSplitMaxPA: Int = 0
+        /// Which request produced `rawSplitMaxPA` — league, season or career,
+        /// hitting or pitching. Without it the number alone is ambiguous: a
+        /// 277 PA sample cannot be a Fall League one, but it could have come
+        /// either from a sportId=17 request, meaning the parameter is being
+        /// ignored, or from a player who resolved to a real MiLB level
+        /// earlier in the same game.
+        var rawSplitSource: String = ""
         var lastRefreshKind: String = "-"
         /// Resolved league per player, batter then pitcher. 17 means the
         /// lookup fell back to the game's own league, which yields Fall League
@@ -937,10 +944,15 @@ final class GameViewModel: ObservableObject {
             let scope = isCareer ? careerLabel : season.map { String($0) } ?? careerLabel
             let rawRows = resp.stats.flatMap(\.splits)
             let rawPA = rawRows.compactMap { $0.stat.plateAppearances ?? $0.stat.battersFaced }
-            // Running maxima: one screenshot at any point in a game then
-            // answers whether this league serves split data at all.
+            // Running maxima, and for the largest sample, the request that
+            // produced it.
             debugInfo.rawSplitRows = max(debugInfo.rawSplitRows, rawRows.count)
-            debugInfo.rawSplitMaxPA = max(debugInfo.rawSplitMaxPA, rawPA.max() ?? 0)
+            if let best = rawPA.max(), best > debugInfo.rawSplitMaxPA {
+                debugInfo.rawSplitMaxPA = best
+                debugInfo.rawSplitSource = "@\(playerLeague) "
+                    + (isCareer ? "car " : "ssn ")
+                    + (group == "pitching" ? "P" : "H")
+            }
 
             let lines = resp.toSplitLines(scope: scope, isCareer: isCareer, minPA: minPA)
             if isCareer {
