@@ -7,18 +7,30 @@ enum FeatureFlags {
     /// Drive the live card from the Gameday socket plus `diffPatch` instead of
     /// polling the whole game object every five seconds.
     ///
-    /// Off by default. The push path cannot be exercised outside a live game, so
-    /// it stays opt-in until it has been watched through real ones — turn it on
-    /// from the debug overlay and compare against the polling backstop.
+    /// **On by default, in every build.** It was opt-in while it could not be
+    /// exercised outside a live game; it has since been watched through four
+    /// complete ones with no patch failures, saving 80–89% of the bytes
+    /// polling the same games would have cost, at roughly 3% of battery an
+    /// hour with the screen on.
     ///
-    /// Always off in Release builds, where the overlay doesn't exist, so a
-    /// value saved by an earlier build can't switch it on in the App Store app.
+    /// Failure degrades rather than breaks. Three consecutive patch failures
+    /// disable the push path for the session, `pushIsHealthy` refuses to back
+    /// the poll loop off while patches are not arriving, and polling runs the
+    /// whole time as a backstop — so the worst case is the behaviour that
+    /// shipped before this existed.
+    ///
+    /// The debug overlay can still switch it off in a build run from Xcode,
+    /// to compare against that backstop. A value saved there persists, which
+    /// is the point; archived builds have no overlay and always get the
+    /// default.
     static var pushFeedEnabled: Bool {
         get {
             #if DEBUG
-            UserDefaults.standard.bool(forKey: pushFeedKey)
+            // `bool(forKey:)` cannot tell "never set" from "set to false",
+            // and the default has to be on.
+            UserDefaults.standard.object(forKey: pushFeedKey) as? Bool ?? true
             #else
-            false
+            true
             #endif
         }
         set { UserDefaults.standard.set(newValue, forKey: pushFeedKey) }
