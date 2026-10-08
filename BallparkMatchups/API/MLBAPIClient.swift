@@ -133,13 +133,6 @@ actor MLBAPIClient {
 
     // MARK: - Team Metadata
 
-    /// A team's league. Needed only for the Fall League, where the game's
-    /// league says nothing about where a player's season numbers live.
-    /// A club's level never changes mid-season, so callers should cache this.
-    func fetchTeam(id: Int) async throws -> TeamDetailResponse {
-        try await fetch(TeamDetailResponse.self, from: "\(baseURL)/api/v1/teams/\(id)")
-    }
-
     // MARK: - Player Metadata
 
     func fetchPlayer(id: Int) async throws -> PlayerResponse {
