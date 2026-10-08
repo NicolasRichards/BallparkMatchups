@@ -322,9 +322,19 @@ nothing outside the Fall League changes.
 ### The threshold
 
 `SplitThresholds.minPA(isCareer:sportId:)`, a free function in Models so the
-table is testable. Fall League career is **10**; every other league keeps 25;
-the season cutoff stays 15 everywhere, Fall League included, since only the
-career one was asked about. The 17 PA sample that prompted this now shows.
+table is testable. **Both Fall League cutoffs are 10**; every other league
+keeps 25 for career and 15 for the season.
+
+The season one came down a day later, after a game five days into the season
+read `11 rows · max 8 PA @17 ssn H` — every request, season and career alike,
+at 8 PA or under. The reason the cutoff has to be this low is that **it
+applies to each split, not to the player's total**: a batter showing 8 PA
+against left-handers has perhaps 25 overall. A regular might reach 120 plate
+appearances by mid-November, putting the common splits around 30 to 40 for
+the whole league season and the narrow ones well below. Against that ceiling
+15 is above where several Fall League splits will ever land, and for a player
+in his first Fall League the season and career numbers are the same thing
+anyway.
 
 ### Still true, and worth remembering
 
