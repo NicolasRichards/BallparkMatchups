@@ -92,8 +92,15 @@ struct ScheduleResponse: Codable {
                     let name: String
                     let abbreviation: String?
                     let sport: SportRef?
+                    /// Present with `hydrate=team`. Needed to tell the Fall League
+                    /// apart from the other winter leagues sharing its sportId.
+                    let league: LeagueRef?
 
                     struct SportRef: Codable {
+                        let id: Int
+                    }
+
+                    struct LeagueRef: Codable {
                         let id: Int
                     }
                 }

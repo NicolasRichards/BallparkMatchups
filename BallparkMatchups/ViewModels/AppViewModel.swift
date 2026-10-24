@@ -222,7 +222,7 @@ final class AppViewModel: ObservableObject {
             let future = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
             return formatter.string(from: future)
         }()
-        let urlString = "https://statsapi.mlb.com/api/v1/schedule?sportId=1,11,12,13,14&venueIds=\(venue.id)&startDate=\(start)&endDate=\(end)&hydrate=team&gameTypes=R,F,D,L,W"
+        let urlString = "https://statsapi.mlb.com/api/v1/schedule?sportId=1,11,12,13,14,17&venueIds=\(venue.id)&startDate=\(start)&endDate=\(end)&hydrate=team&gameTypes=R,F,D,L,W"
         guard let url = URL(string: urlString) else { return }
         do {
             let (data, _) = try await URLSession.shared.data(from: url)

@@ -211,8 +211,23 @@ extension ScheduleResponse {
         dates.flatMap(\.games)
     }
 
+    /// sportId 17 is every winter league — Mexican, Dominican, Venezuelan,
+    /// Australian — not just the Arizona Fall League (league 119), which is the
+    /// only one the app supports. Asking for sportId 17 returns them all.
+    static let fallLeagueId = 119
+
     var validGames: [ScheduleGame] {
         let validTypes = Set(["R", "F", "D", "L", "W"])
-        return allGames.filter { validTypes.contains($0.gameType) }
+        return allGames.filter { validTypes.contains($0.gameType) && $0.isSupportedLeague }
+    }
+}
+
+extension ScheduleResponse.ScheduleGame {
+    /// False for winter-league games outside the Fall League. Requires
+    /// `hydrate=team`; a winter-league game whose league is missing is left
+    /// out rather than mislabeled.
+    var isSupportedLeague: Bool {
+        guard teams.home.team.sport?.id == SportLevel.fallLeague.rawValue else { return true }
+        return teams.home.team.league?.id == ScheduleResponse.fallLeagueId
     }
 }
