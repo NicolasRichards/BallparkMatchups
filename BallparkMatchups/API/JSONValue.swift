@@ -331,6 +331,12 @@ extension JSONValue {
             self = .null
             return
         }
+        // Nothing at this path means the remove is already done, however the
+        // path runs out — a missing key, a short array, or a parent that is
+        // null. The checks below cover the first two; a null parent used to
+        // throw "Cannot descend through" and cost a full refetch for a remove
+        // under a matchup we hold as null.
+        guard value(at: pointer) != nil else { return }
         try withParent(of: pointer) { parent, token in
             switch parent {
             case .array(var arr):
