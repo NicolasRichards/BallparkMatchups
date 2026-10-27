@@ -8,7 +8,7 @@ The owner runs Claude Code locally on a Mac, in the project folder, and opens th
 
 - Cloud sessions are a different setup: they work on a fresh clone and push a `claude/...` branch to GitHub, which does not change the local folder until it is merged and pulled. If you are in a cloud session, there is no Xcode or simulator, so say plainly that the change is unbuilt and list what to check after building in Xcode.
 - The project file `BallparkMatchups.xcodeproj` is committed; there is no `project.yml` in the repo. Avoid editing `project.pbxproj` by hand unless a change requires it (for example adding or removing a file), and say so when you do.
-- A shared Xcode scheme named `BallparkMatchups` exists. Whether a command-line build (`xcodebuild`) works on the owner's Mac has not been verified; confirm before relying on it, and do not report a build as passing unless one actually ran.
+- A shared Xcode scheme named `BallparkMatchups` exists, and command-line builds work on the owner's Mac: `xcodebuild -project BallparkMatchups.xcodeproj -scheme BallparkMatchups -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build` (Debug and Release both verified). Do not report a build as passing unless one actually ran.
 - Optional check: `cd Tools/swift-verify && swift test` (the push-feed patch core; it symlinks `BallparkMatchups/API/JSONValue.swift`). Also `Tools/diffpatch-verify` (see its README).
 
 ## Layout
@@ -22,7 +22,7 @@ The owner runs Claude Code locally on a Mac, in the project folder, and opens th
 
 ## Conventions
 
-- Venue timezone, not device timezone, decides what "today" is.
+- "Today" rolls over at 3 a.m. Eastern for every venue (`todayDateString()` in `AppViewModel` and `VenueCache`), so late West Coast games stay listed after local midnight. It is not the venue's or the device's time zone.
 - Split display thresholds live in `Models/SplitThresholds.swift`; the README "Data Notes" section describes the intended values.
 - Version bumps are their own commits, titled like `Bump to 1.6 (8)`.
 - Commit messages are short imperative sentences describing what changed.
