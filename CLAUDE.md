@@ -2,12 +2,13 @@
 
 iOS app (SwiftUI, Swift 6, iOS 17.0+) showing live batter-vs-pitcher matchups for MLB and MiLB games, built for use at the park. Free, no ads, uses the MLB Stats API. Developed on a Mac in Xcode. `README.md` has the architecture, polling schedule and data rules; read it before changing `GameViewModel`, `MLBAPIClient` or the push feed.
 
-## Build and test
+## Workflow
 
-- Open `BallparkMatchups.xcodeproj` in Xcode and build. The project file is committed; there is no `project.yml` in the repo.
-- Push-feed patch core: `cd Tools/swift-verify && swift test`. It symlinks `BallparkMatchups/API/JSONValue.swift`, so it compiles the same file the app ships.
-- Patch algorithm check against captured MLB traffic: `Tools/diffpatch-verify` (see its README).
-- Xcode and the iOS simulator are not available in the cloud container. Do not claim the app builds or runs unless that was actually verified on a Mac.
+Claude edits and pushes code from a cloud session. The owner then pulls the changes in Xcode (Source Control > Pull) and builds there. The owner does not use Terminal to update the repo, so do not ask them to run git or shell commands; commit and push to the working branch yourself.
+
+- Xcode and the iOS simulator are not available in the cloud container, so changes cannot be built or run here. Never say the app builds or works unless that was verified. When finishing a change, state plainly that it is unbuilt and list what to check after pulling and building in Xcode.
+- The project file `BallparkMatchups.xcodeproj` is committed; there is no `project.yml` in the repo. Avoid editing `project.pbxproj` by hand unless a change requires it (for example adding or removing a file), and say so when you do.
+- Optional checks that can run in the cloud container if a Swift toolchain is present: `cd Tools/swift-verify && swift test` (the push-feed patch core; it symlinks `BallparkMatchups/API/JSONValue.swift`) and `Tools/diffpatch-verify` (see its README). Whether a toolchain exists there has not been verified.
 
 ## Layout
 
