@@ -4,11 +4,12 @@ iOS app (SwiftUI, Swift 6, iOS 17.0+) showing live batter-vs-pitcher matchups fo
 
 ## Workflow
 
-Claude edits and pushes code from a cloud session. The owner then pulls the changes in Xcode (Source Control > Pull) and builds there. The owner does not use Terminal to update the repo, so do not ask them to run git or shell commands; commit and push to the working branch yourself.
+The owner runs Claude Code locally on a Mac, in the project folder, and opens the project in Xcode to find the latest changes. The owner does not use Terminal, so do not ask them to run git or shell commands; do the git work yourself.
 
-- Xcode and the iOS simulator are not available in the cloud container, so changes cannot be built or run here. Never say the app builds or works unless that was verified. When finishing a change, state plainly that it is unbuilt and list what to check after pulling and building in Xcode.
+- Cloud sessions are a different setup: they work on a fresh clone and push a `claude/...` branch to GitHub, which does not change the local folder until it is merged and pulled. If you are in a cloud session, there is no Xcode or simulator, so say plainly that the change is unbuilt and list what to check after building in Xcode.
 - The project file `BallparkMatchups.xcodeproj` is committed; there is no `project.yml` in the repo. Avoid editing `project.pbxproj` by hand unless a change requires it (for example adding or removing a file), and say so when you do.
-- Optional checks that can run in the cloud container if a Swift toolchain is present: `cd Tools/swift-verify && swift test` (the push-feed patch core; it symlinks `BallparkMatchups/API/JSONValue.swift`) and `Tools/diffpatch-verify` (see its README). Whether a toolchain exists there has not been verified.
+- A shared Xcode scheme named `BallparkMatchups` exists. Whether a command-line build (`xcodebuild`) works on the owner's Mac has not been verified; confirm before relying on it, and do not report a build as passing unless one actually ran.
+- Optional check: `cd Tools/swift-verify && swift test` (the push-feed patch core; it symlinks `BallparkMatchups/API/JSONValue.swift`). Also `Tools/diffpatch-verify` (see its README).
 
 ## Layout
 
