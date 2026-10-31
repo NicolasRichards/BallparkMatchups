@@ -37,6 +37,11 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>BallparkDetection</key>
+		<string>Precise location is needed to tell which ballpark you're at.</string>
+	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>To detect which ballpark you're at and show the current matchup.</string>
 	<key>UIApplicationSceneManifest</key>

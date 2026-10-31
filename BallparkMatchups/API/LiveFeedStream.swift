@@ -138,6 +138,12 @@ actor LiveFeedStream {
     // MARK: Main loop
 
     private func run(yielding continuation: AsyncStream<Update>.Continuation) async {
+        // stop() may already have run, and it only closes a socket it can see;
+        // one stored after that would keep its URLSession forever.
+        guard !Task.isCancelled else {
+            continuation.finish()
+            return
+        }
         let socket = GamedaySocket(gamePk: gamePk)
         self.socket = socket
 
@@ -148,6 +154,7 @@ actor LiveFeedStream {
             return
         }
 
+        var reconnecting = false
         for await event in await socket.events() {
             if Task.isCancelled { break }
             switch event {
@@ -158,10 +165,17 @@ actor LiveFeedStream {
             case .opened:
                 stats.isConnected = true
                 stats.socketNote = nil
+                if reconnecting {
+                    // Frames sent while the socket was down are gone, and
+                    // nothing else would catch the tree up.
+                    reconnecting = false
+                    _ = await seedFromFullFeed(yielding: continuation)
+                }
 
             case .disconnected(let reason):
                 stats.isConnected = false
                 stats.socketNote = reason
+                reconnecting = true
 
             case .unrecognisedFrame(let text):
                 stats.unrecognisedFrames += 1
@@ -211,11 +225,12 @@ actor LiveFeedStream {
                 startTimecode: timecode,
                 pushUpdateId: event.updateId
             )
-            try applyResponse(response.value)
-            stats.updatesApplied += 1
-            stats.lastUpdateAt = Date()
-            stats.lastPatchAt = Date()
+            let changed = try applyResponse(response.value)
             stats.bytesOverPush += response.byteCount
+            guard changed else {
+                stats.consecutivePatchFailures = 0
+                return
+            }
 
             guard let decoded = try? tree?.decoded(as: LiveFeedResponse.self) else {
                 // The tree no longer decodes — treat that exactly like a failed
@@ -223,6 +238,9 @@ actor LiveFeedStream {
                 await recordFailure("decode after patch", yielding: continuation)
                 return
             }
+            stats.updatesApplied += 1
+            stats.lastUpdateAt = Date()
+            stats.lastPatchAt = Date()
             stats.consecutivePatchFailures = 0
             continuation.yield(.feed(decoded))
         } catch {
@@ -254,45 +272,15 @@ actor LiveFeedStream {
         continuation.yield(.disabled(reason: note))
     }
 
-    /// Whether an operation that failed in place might succeed once the rest
-    /// of the batch has landed.
-    ///
-    /// MLB's differ emits operations against the game's *final* state, not in
-    /// dependency order, so an operation can legitimately reference something a
-    /// later one creates. Two shapes of that have been seen live:
-    ///
-    /// - a `copy` or `move` whose source does not exist yet;
-    /// - an `add` or `replace` past the end of an array, such as
-    ///   `replace /metaData/logicalEvents/2` arriving while that array holds a
-    ///   single element. An index exactly at the end already appends; this is
-    ///   the case where an earlier index is still missing.
-    ///
-    /// Anything else is a genuine desync and still earns a refetch.
-    private static func isWorthRetrying(
-        _ error: JSONPatchError,
-        _ op: JSONPatchOperation.Kind
-    ) -> Bool {
-        switch error {
-        case .pathNotFound:
-            return op == .copy || op == .move
-        case .arrayIndexOutOfBounds:
-            // Seen live as `copy /liveData/plays/allPlays/22/pitchIndex/2`
-            // against an empty array, so the destination can be short for the
-            // same reason an add or replace target can be.
-            return op == .add || op == .replace || op == .copy || op == .move
-        default:
-            return false
-        }
-    }
-
     /// Applies a `diffPatch` response, which is either a list of change sets or
-    /// an entire replacement game object.
-    private func applyResponse(_ response: JSONValue) throws {
+    /// an entire replacement game object. Returns false for an empty response,
+    /// which leaves the tree as it was.
+    private func applyResponse(_ response: JSONValue) throws -> Bool {
         switch response {
         case .array(let elements):
             guard !elements.isEmpty else {
                 stats.duplicateOrEmpty += 1
-                return
+                return false
             }
             let envelopes = try elements.map { try $0.decoded(as: DiffPatchEnvelope.self) }
             stats.patchOpsApplied += envelopes.reduce(0) { $0 + $1.diff.count }
@@ -306,7 +294,8 @@ actor LiveFeedStream {
                     do {
                         try working.apply(operation)
                     } catch let error as JSONPatchError {
-                        if Self.isWorthRetrying(error, operation.op) {
+                        // See JSONPatchError.isWorthRetrying for what defers.
+                        if error.isWorthRetrying(operation.op) {
                             deferred.append(operation)
                             continue
                         }
@@ -323,26 +312,26 @@ actor LiveFeedStream {
                 do {
                     try working.apply(operation)
                     stats.deferredResolved += 1
-                } catch {
+                } catch JSONPatchError.pathNotFound {
                     // The source never appeared. Dropping the operation leaves
                     // us one value adrift of MLB, against a ~769 KB refetch to
                     // correct it — and the paths this happens on, such as
                     // about/captivatingIndex, are ones the typed model never
                     // decodes. Counted so the trade stays visible.
                     stats.droppedOperations += 1
-                    var note = "dropped \(operation.op.rawValue) \(operation.path)"
-                    // Which array was short, and by how much, is what
-                    // identifies the cause — the path alone names only the
-                    // leaf, which is rarely the level that actually failed.
-                    if let patchError = error as? JSONPatchError,
-                       case .arrayIndexOutOfBounds(_, let index, let count) = patchError {
-                        note += " [idx \(index) of \(count)]"
-                    }
-                    stats.lastDroppedOperation = note
+                    stats.lastDroppedOperation =
+                        "dropped \(operation.op.rawValue) \(operation.path)"
+                } catch {
+                    // The source turned up but the write itself failed: a real
+                    // fault, so refetch like any other.
+                    stats.lastFailedOperation =
+                        "\(operation.op.rawValue) \(operation.path)"
+                    throw error
                 }
             }
 
             tree = working
+            return true
 
         case .object:
             // Gameday answered with the whole game object instead of a diff.
@@ -351,6 +340,7 @@ actor LiveFeedStream {
             // nothing.
             stats.wholeObjectResponses += 1
             tree = response
+            return true
 
         default:
             throw JSONPatchError.notTraversable("diffPatch response root")

@@ -65,8 +65,7 @@ final class PollScheduleTests: XCTestCase {
     private func finalState() -> GameUIState {
         .final_(FinalInfo(
             homeTeam: "SF", awayTeam: "LAD", homeScore: 4, awayScore: 3,
-            winnerName: nil, winnerRecord: nil, loserName: nil,
-            loserRecord: nil, saveName: nil
+            winnerName: nil, loserName: nil, saveName: nil
         ))
     }
 

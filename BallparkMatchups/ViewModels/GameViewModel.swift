@@ -39,10 +39,14 @@ final class GameViewModel: ObservableObject {
     /// short games of a doubleheader. The end-of-game checks compare against
     /// this rather than assuming nine.
     private var scheduledInnings = 9
+    /// When the feed first read "Game Over" without decisions. Polling goes on
+    /// until "Final", but not forever if a game never gets there.
+    private var awaitingDecisionsSince: Date?
 
     // In-memory caches
     private var playerCache: [Int: PlayerInfo] = [:]
-    private var careerSplitCache: [CacheKey: [SplitLine]] = [:]
+    private var careerSplitCache: [CareerSplitKey: [SplitLine]] = [:]
+    private var shownSplitData: SplitData?
     private var careerBvPCache: [BvPKey: BvPLine?] = [:]
     /// Batter's overall OPS, the baselines the split filter compares against.
     /// nil means the request worked but he has no such line yet.
@@ -76,17 +80,25 @@ final class GameViewModel: ObservableObject {
         /// earlier in the same game.
         var rawSplitSource: String = ""
         var lastRefreshKind: String = "-"
-        /// Resolved league per player, batter then pitcher. 17 means the
-        /// lookup fell back to the game's own league, which yields Fall League
-        /// samples too small to clear the thresholds.
         var pushEnabled: Bool = false
         var push: PushFeedStats?
     }
 
-    struct CacheKey: Hashable {
+    /// Batting and pitching lines share sitCodes (risp, vl, vr…), so a
+    /// two-way player needs one entry per group.
+    struct CareerSplitKey: Hashable {
         let playerId: Int
-        let sitCode: String
-        let isCareer: Bool
+        let group: String
+    }
+
+    /// The split lines and baselines behind the card on screen, kept so a
+    /// count change can re-rank them without a request.
+    struct SplitData {
+        let batterId: Int
+        let pitcherId: Int
+        let batterSplits: [SplitLine]
+        let pitcherSplits: [SplitLine]
+        let baselines: (season: Double?, career: Double?)
     }
 
     struct BaselineKey: Hashable {
@@ -109,29 +121,67 @@ final class GameViewModel: ObservableObject {
     // MARK: - Lifecycle
 
     func startPolling() {
-        beginPollLoop()
         startPushIfEnabled()
+        // The socket starts by downloading the full feed; polling at the same
+        // moment would download it twice.
+        beginPollLoop(firstPoll: pushStream != nil ? .afterPushSeed : .now)
+    }
+
+    private enum FirstPoll {
+        case now
+        /// A feed was just processed, so go straight to the interval.
+        case skip
+        /// Wait for the socket's seed feed, and poll only if it doesn't come.
+        case afterPushSeed
     }
 
     /// Restarts the poll loop alone, leaving the socket as it is. Used when
     /// something has happened that the loop should react to now rather than
     /// after it finishes the sleep it is already in.
-    private func beginPollLoop() {
+    private func beginPollLoop(firstPoll: FirstPoll = .now) {
         pollingTask?.cancel()
+        pollGeneration += 1
+        let generation = pollGeneration
         // The cancelled loop's poll may not have unwound yet. Its flag would
         // make the new loop's first poll a no-op and then wait a full interval.
         pollInFlight = false
         pollingTask = Task { [weak self] in
+            var skipPoll = firstPoll == .skip
+            if firstPoll == .afterPushSeed {
+                skipPoll = await self?.waitForPushSeed() ?? false
+            }
             while !Task.isCancelled {
                 guard let self else { return }
-                await self.poll()
+                if skipPoll {
+                    skipPoll = false
+                } else {
+                    await self.poll(generation: generation)
+                }
                 let interval = self.nextInterval()
-                guard interval.isFinite else { return }  // game over — stop the loop
+                guard interval.isFinite else {
+                    // Game over (or stopped waiting for W/L/SV): nothing left to
+                    // update, so close the socket too instead of leaving it open.
+                    self.stopPush()
+                    return
+                }
                 self.currentPollInterval = interval
                 self.debugInfo.pollingInterval = interval
+                // Cleared only once the interval is set, so the seed's own
+                // processFeed doesn't restart the loop into a duplicate poll.
+                self.pushSeedPending = false
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             }
         }
+    }
+
+    /// Waits up to 10 seconds for the socket's first feed. True when it came,
+    /// so the loop can skip a poll that would fetch the same feed.
+    private func waitForPushSeed() async -> Bool {
+        let deadline = Date().addingTimeInterval(10)
+        while pushSeedPending, !pushSeedArrived, Date() < deadline, !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+        return pushSeedArrived
     }
 
     /// Records that the game is over and gets the poll loop looking for the
@@ -177,7 +227,10 @@ final class GameViewModel: ObservableObject {
 
         let stream = LiveFeedStream(gamePk: gamePk)
         pushStream = stream
+        pushSeedPending = true
+        pushSeedArrived = false
         pushTask = Task { [weak self] in
+            var lastFeedAt: Date?
             for await update in await stream.start() {
                 guard let self, !Task.isCancelled else { return }
                 switch update {
@@ -185,6 +238,8 @@ final class GameViewModel: ObservableObject {
                     await self.processFeed(feed)
                     self.lastUpdated = Date()
                     self.connectionStatus = .ok
+                    lastFeedAt = Date()
+                    if self.pushStream === stream { self.pushSeedArrived = true }
                 case .gameFinished:
                     // Observed on three games running: the last out lands, the
                     // socket says the game is over, and the card sat on "END OF
@@ -196,8 +251,10 @@ final class GameViewModel: ObservableObject {
                     // Started before stopPush(), which cancels the very task
                     // this runs in. An unstructured Task is not cancelled with
                     // its creator, so either order works — this one leaves
-                    // nothing to reason about.
-                    self.beginPollLoop()
+                    // nothing to reason about. The stream fetched a full feed
+                    // just before this; when it came, don't fetch it again.
+                    let justFed = lastFeedAt.map { Date().timeIntervalSince($0) < 5 } ?? false
+                    self.beginPollLoop(firstPoll: justFed ? .skip : .now)
                     self.stopPush()
                     return
                 case .disabled:
@@ -209,6 +266,8 @@ final class GameViewModel: ObservableObject {
                 }
                 self.debugInfo.push = await stream.currentStats()
             }
+            // The stream ended without a feed: its first download failed.
+            if let self, self.pushStream === stream { self.pushSeedPending = false }
         }
     }
 
@@ -224,6 +283,7 @@ final class GameViewModel: ObservableObject {
     private func stopPush() {
         pushTask?.cancel()
         pushTask = nil
+        pushSeedPending = false
         let stream = pushStream
         pushStream = nil
         Task { await stream?.stop() }
@@ -232,15 +292,22 @@ final class GameViewModel: ObservableObject {
     // MARK: - Poll
 
     private var pollInFlight = false
+    /// Bumped by each new poll loop, so a cancelled loop's poll that is still
+    /// unwinding can't clear the flag of the poll that replaced it.
+    private var pollGeneration = 0
+    /// The socket's first full-feed download is under way, and the poll loop
+    /// is waiting on it instead of fetching the same feed.
+    private var pushSeedPending = false
+    private var pushSeedArrived = false
     /// The interval the poll loop is currently sleeping on. Read when a feed
     /// arrives on the socket, to notice that the card now wants checking
     /// sooner than the sleep already under way allows.
     private var currentPollInterval: TimeInterval = 12
 
-    private func poll() async {
+    private func poll(generation: Int) async {
         guard !pollInFlight else { return }
         pollInFlight = true
-        defer { pollInFlight = false }
+        defer { if generation == pollGeneration { pollInFlight = false } }
 
         do {
             let feed = try await api.fetchLiveFeed(gamePk: gamePk)
@@ -298,7 +365,7 @@ final class GameViewModel: ObservableObject {
         // before. That is most of a minute of a stale card, and it is how a
         // game ending in the 10th kept saying "coming to bat". A poll
         // recomputes on its own as it unwinds, so this is only for push.
-        guard !pollInFlight else { return }
+        guard !pollInFlight, !pushSeedPending else { return }
         let wanted = nextInterval()
         if wanted.isFinite, wanted < currentPollInterval { beginPollLoop() }
     }
@@ -333,8 +400,19 @@ final class GameViewModel: ObservableObject {
         // an exact match sent those to the in-progress path, where a finished
         // game polled forever and a postponed one never left the spinner.
         switch status {
-        case let s where s.hasPrefix("Final") || s.hasPrefix("Game Over")
+        case let s where s.hasPrefix("Game Over"):
+            // W/L/SV are published only at "Final", so keep polling for them.
+            handleFinal(feed)
+            if feed.liveData?.decisions?.winner != nil {
+                awaitingDecisionsSince = nil
+                stopPolling()
+            } else if awaitingDecisionsSince == nil {
+                awaitingDecisionsSince = Date()
+            }
+
+        case let s where s.hasPrefix("Final")
             || s.hasPrefix("Completed Early") || s.hasPrefix("Forfeit"):
+            awaitingDecisionsSince = nil
             handleFinal(feed)
             stopPolling()
 
@@ -400,7 +478,7 @@ final class GameViewModel: ObservableObject {
         // minutes. Treat it as unknown rather than a first pitch long passed.
         let firstPitch: Date? = feed.gameData.status.startTimeTBD == true
             ? nil
-            : feed.gameData.datetime?.dateTime.flatMap { parseISO($0) }
+            : feed.gameData.datetime?.dateTime.flatMap(APIDates.parseISO)
 
         uiState = .preGame(PreGameInfo(
             venueName: venueName,
@@ -472,13 +550,6 @@ final class GameViewModel: ObservableObject {
         let inning = linescore.currentInning ?? 1
         let offense = linescore.offense
 
-        let runnersCode: String = {
-            let on1 = offense?.onFirst != nil ? "1" : "_"
-            let on2 = offense?.onSecond != nil ? "2" : "_"
-            let on3 = offense?.onThird != nil ? "3" : "_"
-            return "\(on1)\(on2)\(on3)"
-        }()
-
         let newTick = TickState(
             atBatIndex: currentPlay.atBatIndex,
             batterId: batterId,
@@ -486,7 +557,11 @@ final class GameViewModel: ObservableObject {
             balls: balls,
             strikes: strikes,
             outs: outs,
-            runnersCode: runnersCode,
+            runners: RunnersState.from(
+                onFirst: offense?.onFirst != nil,
+                onSecond: offense?.onSecond != nil,
+                onThird: offense?.onThird != nil
+            ),
             inningState: inningState,
             halfInning: inning
         )
@@ -524,13 +599,21 @@ final class GameViewModel: ObservableObject {
                     balls: balls,
                     strikes: strikes
                 )
+                // Count splits and pitch-count buckets follow every pitch, so
+                // re-rank from the lines already loaded for this matchup.
+                var batterSplits = card.batterSplits
+                var pitcherSplit = card.pitcherSplit
+                if let data = shownSplitData,
+                   data.batterId == newTick.batterId, data.pitcherId == newTick.pitcherId {
+                    (batterSplits, pitcherSplit) = selectSplits(data, tick: newTick, feed: feed, isFirstBatter: isFirstBatter)
+                }
                 uiState = .live(MatchupCard(
                     batter: card.batter,
                     pitcher: card.pitcher,
                     situation: newSit,
                     bvp: card.bvp,
-                    batterSplits: card.batterSplits,
-                    pitcherSplit: card.pitcherSplit,
+                    batterSplits: batterSplits,
+                    pitcherSplit: pitcherSplit,
                     batterGame: card.batterGame,
                     pitcherGame: extractPitcherGame(playerId: newTick.pitcherId, feed: feed),
                     lastEvent: card.lastEvent
@@ -562,19 +645,7 @@ final class GameViewModel: ObservableObject {
     private func refreshSituational(tick: TickState, feed: LiveFeedResponse, isFirstBatter: Bool) async -> Bool {
         guard case .live(let existing) = uiState else { return false }
 
-        let runners = RunnersState.from(
-            onFirst: tick.runnersCode.contains("1"),
-            onSecond: tick.runnersCode.contains("2"),
-            onThird: tick.runnersCode.contains("3")
-        )
-        let sit = SituationStrip(
-            inning: tick.halfInning,
-            inningState: tick.inningState,
-            outs: tick.outs,
-            runners: runners,
-            balls: tick.balls,
-            strikes: tick.strikes
-        )
+        let sit = situation(for: tick)
 
         // Fetch fresh season splits; career splits still cached
         async let seasonBatterResult = fetchSplits(
@@ -598,21 +669,14 @@ final class GameViewModel: ObservableObject {
               let baselines = await baselinesResult
         else { return false }
 
-        let allBatterSplits = cachedSplits(for: tick.batterId, isCareer: true) + seasonBatterSplits
-        let pitchCount = currentPitchCount(pitcherId: tick.pitcherId, in: feed)
-        let allPitcherSplits = cachedSplits(for: tick.pitcherId, isCareer: true) + seasonPitcherSplits
-
-        let (newBatterSplits, newPitcherSplit, candidateCount) = buildSplitCards(
-            tick: tick,
-            batterSplits: allBatterSplits,
-            pitcherSplits: allPitcherSplits,
-            pitchCount: pitchCount,
-            isFirstBatter: isFirstBatter,
-            isReliever: pitcherIsReliever(id: tick.pitcherId, in: feed),
+        let data = SplitData(
+            batterId: tick.batterId,
+            pitcherId: tick.pitcherId,
+            batterSplits: cachedCareerSplits(for: tick.batterId, group: "hitting") + seasonBatterSplits,
+            pitcherSplits: cachedCareerSplits(for: tick.pitcherId, group: "pitching") + seasonPitcherSplits,
             baselines: baselines
         )
-        debugInfo.candidateSplits = candidateCount
-        debugInfo.shownSplits = newBatterSplits.count + (newPitcherSplit != nil ? 1 : 0)
+        let (newBatterSplits, newPitcherSplit) = selectSplits(data, tick: tick, feed: feed, isFirstBatter: isFirstBatter)
 
         uiState = .live(MatchupCard(
             batter: existing.batter,
@@ -669,44 +733,30 @@ final class GameViewModel: ObservableObject {
         async let baselinesResult = batterBaselines(tick.batterId)
 
         let (batterInfo, pitcherInfo) = await (batter, pitcher)
-        let bvp = await bvpResult
-        let baselines = await baselinesResult
+        let bvpLoaded = await bvpResult
+        let baselinesLoaded = await baselinesResult
         let (careerBatter, careerPitcher, seasonBatter, seasonPitcher) = await (
-            careerBatterSplitsResult ?? [], careerPitcherSplitsResult ?? [],
-            seasonBatterSplitsResult ?? [], seasonPitcherSplitsResult ?? []
+            careerBatterSplitsResult, careerPitcherSplitsResult,
+            seasonBatterSplitsResult, seasonPitcherSplitsResult
         )
 
-        guard let bInfo = batterInfo, let pInfo = pitcherInfo else { return false }
+        // Any failed or cancelled request (the phone locked mid-refresh, say)
+        // fails the whole card, or a bare one would stick for the at-bat.
+        guard !Task.isCancelled,
+              let bInfo = batterInfo, let pInfo = pitcherInfo,
+              let bvp = bvpLoaded, let baselines = baselinesLoaded,
+              let careerBatter, let careerPitcher, let seasonBatter, let seasonPitcher
+        else { return false }
 
-        let runners = RunnersState.from(
-            onFirst: tick.runnersCode.contains("1"),
-            onSecond: tick.runnersCode.contains("2"),
-            onThird: tick.runnersCode.contains("3")
+        let sit = situation(for: tick)
+        let data = SplitData(
+            batterId: tick.batterId,
+            pitcherId: tick.pitcherId,
+            batterSplits: careerBatter + seasonBatter,
+            pitcherSplits: careerPitcher + seasonPitcher,
+            baselines: baselines
         )
-        let sit = SituationStrip(
-            inning: tick.halfInning,
-            inningState: tick.inningState,
-            outs: tick.outs,
-            runners: runners,
-            balls: tick.balls,
-            strikes: tick.strikes
-        )
-
-        let allBatterSplits = careerBatter + seasonBatter
-        let allPitcherSplits = careerPitcher + seasonPitcher
-        let pitchCount = currentPitchCount(pitcherId: tick.pitcherId, in: feed)
-
-        let (newBatterSplits, newPitcherSplit, candidateCount) = buildSplitCards(
-            tick: tick,
-            batterSplits: allBatterSplits,
-            pitcherSplits: allPitcherSplits,
-            pitchCount: pitchCount,
-            isFirstBatter: isFirstBatter,
-            isReliever: pitcherIsReliever(id: tick.pitcherId, in: feed),
-            baselines: baselines ?? (season: nil, career: nil)
-        )
-        debugInfo.candidateSplits = candidateCount
-        debugInfo.shownSplits = newBatterSplits.count + (newPitcherSplit != nil ? 1 : 0)
+        let (newBatterSplits, newPitcherSplit) = selectSplits(data, tick: tick, feed: feed, isFirstBatter: isFirstBatter)
 
         let batterGame = extractBatterGame(playerId: tick.batterId, feed: feed)
         let pitcherGame = extractPitcherGame(playerId: tick.pitcherId, feed: feed)
@@ -739,9 +789,7 @@ final class GameViewModel: ObservableObject {
             homeScore: linescore?.teams?.home.runs ?? 0,
             awayScore: linescore?.teams?.away.runs ?? 0,
             winnerName: decisions?.winner?.fullName,
-            winnerRecord: nil,
             loserName: decisions?.loser?.fullName,
-            loserRecord: nil,
             saveName: decisions?.save?.fullName
         ))
     }
@@ -769,15 +817,6 @@ final class GameViewModel: ObservableObject {
         return nil
     }
 
-    /// The league whose numbers actually describe this player.
-    ///
-    /// Everywhere but the Fall League this is the game's own league — a
-    /// Double-A game is played by Double-A players. AFL rosters are on loan
-    /// from clubs across the system, so a Glendale pitcher's real season may
-    /// be High-A. Asking for AFL numbers returns a handful of Fall League
-    /// plate appearances, which the split thresholds reject, leaving a card
-    /// with a name on it and nothing underneath.
-    ///
     /// The batter's season and career OPS in this league, or nil if either
     /// request failed. Only successful answers are cached, so a failure is
     /// tried again on the next refresh.
@@ -801,8 +840,9 @@ final class GameViewModel: ObservableObject {
     }
 
     /// Cache the answer, including "no history", but not a failed request —
-    /// that would hide this matchup for the rest of the game.
-    private func cachedOrFetchBvP(batterId: Int, pitcherId: Int) async -> BvPLine? {
+    /// that would hide this matchup for the rest of the game. The outer nil
+    /// means the request failed; the inner one means no history.
+    private func cachedOrFetchBvP(batterId: Int, pitcherId: Int) async -> BvPLine?? {
         let key = BvPKey(batterId: batterId, pitcherId: pitcherId)
         if let cached = careerBvPCache[key] { return cached }
         do {
@@ -825,10 +865,7 @@ final class GameViewModel: ObservableObject {
     }
 
     private func fetchCareerSplitsIfNeeded(playerId: Int, codes: [String], group: String) async -> [SplitLine]? {
-        let existing = codes.compactMap { code -> SplitLine? in
-            careerSplitCache[CacheKey(playerId: playerId, sitCode: code, isCareer: true)]?.first
-        }
-        if !existing.isEmpty { return existing }
+        if let cached = careerSplitCache[CareerSplitKey(playerId: playerId, group: group)] { return cached }
         return await fetchSplits(playerId: playerId, codes: codes, group: group, season: nil, isCareer: true)
     }
 
@@ -858,62 +895,67 @@ final class GameViewModel: ObservableObject {
 
             let lines = resp.toSplitLines(scope: scope, isCareer: isCareer, minPA: minPA)
             if isCareer {
-                for line in lines {
-                    let key = CacheKey(playerId: playerId, sitCode: line.sitCode, isCareer: true)
-                    careerSplitCache[key] = [line]
-                }
+                careerSplitCache[CareerSplitKey(playerId: playerId, group: group)] = lines
             }
             return lines
         } catch { return nil }
     }
 
-    private func cachedSplits(for playerId: Int, isCareer: Bool) -> [SplitLine] {
-        careerSplitCache.keys
-            .filter { $0.playerId == playerId && $0.isCareer == isCareer }
-            .compactMap { careerSplitCache[$0]?.first }
+    private func cachedCareerSplits(for playerId: Int, group: String) -> [SplitLine] {
+        careerSplitCache[CareerSplitKey(playerId: playerId, group: group)] ?? []
     }
 
-    private func buildSplitCards(
+    private func situation(for tick: TickState) -> SituationStrip {
+        SituationStrip(
+            inning: tick.halfInning,
+            inningState: tick.inningState,
+            outs: tick.outs,
+            runners: tick.runners,
+            balls: tick.balls,
+            strikes: tick.strikes
+        )
+    }
+
+    /// Picks the splits to show and remembers the data they came from.
+    private func selectSplits(
+        _ data: SplitData,
         tick: TickState,
-        batterSplits: [SplitLine],
-        pitcherSplits: [SplitLine],
-        pitchCount: Int?,
-        isFirstBatter: Bool,
-        isReliever: Bool,
-        baselines: (season: Double?, career: Double?)
-    ) -> (batterSplits: [SplitLine], pitcherSplit: SplitLine?, candidateCount: Int) {
+        feed: LiveFeedResponse,
+        isFirstBatter: Bool
+    ) -> (batterSplits: [SplitLine], pitcherSplit: SplitLine?) {
+        shownSplitData = data
         let pitcherHand = playerCache[tick.pitcherId]?.pitchHand
         let batterHand = playerCache[tick.batterId]?.batSide
         let scoreDiff = scoreDisplay.map { abs($0.homeScore - $0.awayScore) }
 
         let batter3 = SplitPriorityEngine.selectBatterSplits(
             tickState: tick,
-            splits: batterSplits,
+            splits: data.batterSplits,
             pitcherHand: pitcherHand,
             scoreDiff: scoreDiff,
-            seasonBaselineOPS: baselines.season,
-            careerBaselineOPS: baselines.career,
+            seasonBaselineOPS: data.baselines.season,
+            careerBaselineOPS: data.baselines.career,
+            batterHand: batterHand,
             maxCount: 3
         )
 
         // Handedness sitCodes (vl/vr) mean different things for batters vs pitchers
         // so they are never truly redundant and should not be deduplicated.
-        let handednessCodes: Set<String> = ["vl", "vr"]
-        let pitcherSplit: SplitLine? = SplitPriorityEngine.selectPitcherSplit(
+        let pitcherSplit = SplitPriorityEngine.selectPitcherSplit(
             tickState: tick,
-            splits: pitcherSplits,
-            currentPitchCount: pitchCount,
-            isReliever: isReliever,
+            splits: data.pitcherSplits,
+            currentPitchCount: boxscorePlayer(tick.pitcherId, in: feed)?.stats?.pitching?.numberOfPitches,
+            isReliever: pitcherIsReliever(id: tick.pitcherId, in: feed),
             isFirstBatter: isFirstBatter,
-            careerOPS: nil,
             batterHand: batterHand,
-            scoreDiff: scoreDiff
-        ).flatMap { card in
-            if handednessCodes.contains(card.sitCode) { return card }
-            return batter3.contains(where: { $0.sitCode == card.sitCode }) ? nil : card
-        }
+            pitcherHand: pitcherHand,
+            scoreDiff: scoreDiff,
+            excludedCodes: Set(batter3.map(\.sitCode)).subtracting(["vl", "vr"])
+        )
 
-        return (batter3, pitcherSplit, batterSplits.count + pitcherSplits.count)
+        debugInfo.candidateSplits = data.batterSplits.count + data.pitcherSplits.count
+        debugInfo.shownSplits = batter3.count + (pitcherSplit != nil ? 1 : 0)
+        return (batter3, pitcherSplit)
     }
 
     /// True when this pitcher is not his team's starter.
@@ -933,11 +975,16 @@ final class GameViewModel: ObservableObject {
         return false
     }
 
+    private func boxscorePlayer(
+        _ id: Int, in feed: LiveFeedResponse
+    ) -> LiveFeedResponse.LiveData.Boxscore.BoxscoreTeams.TeamBox.BoxPlayer? {
+        guard let teams = feed.liveData?.boxscore?.teams else { return nil }
+        let key = "ID\(id)"
+        return teams.home?.players?[key] ?? teams.away?.players?[key]
+    }
+
     private func extractBatterGame(playerId: Int, feed: LiveFeedResponse) -> BatterGameLine? {
-        guard let boxTeams = feed.liveData?.boxscore?.teams else { return nil }
-        let key = "ID\(playerId)"
-        let player = boxTeams.home?.players?[key] ?? boxTeams.away?.players?[key]
-        guard let batting = player?.stats?.batting else { return nil }
+        guard let batting = boxscorePlayer(playerId, in: feed)?.stats?.batting else { return nil }
         return BatterGameLine(
             atBats: batting.atBats ?? 0,
             hits: batting.hits ?? 0,
@@ -946,10 +993,7 @@ final class GameViewModel: ObservableObject {
     }
 
     private func extractPitcherGame(playerId: Int, feed: LiveFeedResponse) -> PitcherGameLine? {
-        guard let boxTeams = feed.liveData?.boxscore?.teams else { return nil }
-        let key = "ID\(playerId)"
-        let player = boxTeams.home?.players?[key] ?? boxTeams.away?.players?[key]
-        guard let pitching = player?.stats?.pitching else { return nil }
+        guard let pitching = boxscorePlayer(playerId, in: feed)?.stats?.pitching else { return nil }
         return PitcherGameLine(
             pitches: pitching.numberOfPitches ?? 0,
             strikes: pitching.strikes ?? 0,
@@ -966,14 +1010,6 @@ final class GameViewModel: ObservableObject {
             .result?.description
     }
 
-    private func currentPitchCount(pitcherId: Int, in feed: LiveFeedResponse) -> Int? {
-        guard let boxTeams = feed.liveData?.boxscore?.teams else { return nil }
-        let playerKey = "ID\(pitcherId)"
-        let homePlayer = boxTeams.home?.players?[playerKey]
-        let awayPlayer = boxTeams.away?.players?[playerKey]
-        return (homePlayer ?? awayPlayer)?.stats?.pitching?.numberOfPitches
-    }
-
     private func nextInterval() -> TimeInterval {
         PollSchedule.interval(PollSchedule.Inputs(
             state: uiState,
@@ -981,7 +1017,8 @@ final class GameViewModel: ObservableObject {
             gameEndAnnounced: gameEndAnnounced,
             scheduledInnings: scheduledInnings,
             betweenInningsStart: betweenInningsStart,
-            sawBreakStart: sawBreakStart
+            sawBreakStart: sawBreakStart,
+            awaitingDecisions: awaitingDecisionsSince.map { Date().timeIntervalSince($0) < 15 * 60 } ?? false
         ))
     }
 
@@ -1002,14 +1039,6 @@ final class GameViewModel: ObservableObject {
     private func currentSeason() -> Int {
         Calendar(identifier: .gregorian).component(.year, from: Date())
     }
-
-    private func parseISO(_ string: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = formatter.date(from: string) { return d }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: string)
-    }
 }
 
 // MARK: - Player Mapping
@@ -1017,7 +1046,7 @@ final class GameViewModel: ObservableObject {
 extension PlayerResponse.PersonDetail {
     func toPlayerInfo() -> PlayerInfo {
         let (feet, inches) = parseHeight(height)
-        let bd = birthDate.flatMap { parseDate($0) }
+        let bd = birthDate.flatMap(APIDates.parseDay)
         return PlayerInfo(
             id: id,
             fullName: fullName,
@@ -1042,14 +1071,6 @@ extension PlayerResponse.PersonDetail {
               let ins = Int(parts[1].trimmingCharacters(in: .whitespaces))
         else { return (nil, nil) }
         return (ft, ins)
-    }
-
-    private func parseDate(_ s: String) -> Date? {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        // POSIX locale: API dates must not depend on the device's calendar setting
-        f.locale = Locale(identifier: "en_US_POSIX")
-        return f.date(from: s)
     }
 }
 

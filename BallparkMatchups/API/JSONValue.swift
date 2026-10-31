@@ -159,6 +159,22 @@ enum JSONPatchError: LocalizedError, Equatable {
     }
 }
 
+extension JSONPatchError {
+    /// Whether an operation that failed with this error might succeed once the
+    /// rest of its batch has landed.
+    ///
+    /// MLB's differ emits operations against the game's *final* state, not in
+    /// dependency order, so a `copy` or `move` can name a source that a later
+    /// operation creates. That is the only such shape left: a write past the
+    /// end of an array grows it now, so `arrayIndexOutOfBounds` comes only from
+    /// a negative index, a non-numeric token through an array or a gap over
+    /// the cap — faults that fail identically on retry and must refetch.
+    func isWorthRetrying(_ op: JSONPatchOperation.Kind) -> Bool {
+        if case .pathNotFound = self { return op == .copy || op == .move }
+        return false
+    }
+}
+
 // MARK: - Patch Operation (RFC 6902)
 
 struct JSONPatchOperation: Sendable, Equatable {
@@ -249,7 +265,7 @@ extension JSONValue {
                     path: operation.path.description
                 )
             }
-            try set(newValue, at: operation.path, insert: operation.op == .add)
+            try set(newValue, at: operation.path)
 
         case .remove:
             try removeValue(at: operation.path)
@@ -264,7 +280,7 @@ extension JSONValue {
             guard let copied = value(at: from) else {
                 throw JSONPatchError.pathNotFound(from.description)
             }
-            try set(copied, at: operation.path, insert: true)
+            try set(copied, at: operation.path)
 
         case .move:
             guard let from = operation.from else {
@@ -276,14 +292,26 @@ extension JSONValue {
             guard let moved = value(at: from) else {
                 throw JSONPatchError.pathNotFound(from.description)
             }
-            try removeValue(at: from)
-            try set(moved, at: operation.path, insert: true)
+            // Work on a copy so a destination that throws cannot lose the source.
+            var result = self
+            try result.removeValue(at: from)
+            try result.set(moved, at: operation.path)
+            self = result
         }
     }
 
     // MARK: Leaf writes
 
-    private mutating func set(_ newValue: JSONValue, at pointer: JSONPointer, insert: Bool) throws {
+    /// Assigns `newValue` at `pointer`, for add, replace, copy and move alike.
+    ///
+    /// MLB's stream is not RFC 6902: the reference writes
+    /// `root[accessor] = value` for every one of these and lets JavaScript grow
+    /// the array, filling the gap with holes that serialise as null. An
+    /// in-bounds `add` therefore overwrites rather than inserts. Inserting used
+    /// to diverge as soon as an array had holes — every hole is in bounds, so
+    /// descending adds (`/a/4`, `/a/3`, …) each shifted the tail right and
+    /// left the array longer than the server's.
+    private mutating func set(_ newValue: JSONValue, at pointer: JSONPointer) throws {
         guard !pointer.isRoot else {
             self = newValue
             return
@@ -299,21 +327,12 @@ extension JSONValue {
                         path: pointer.description, index: i, count: arr.count
                     )
                 }
-                if insert, i < arr.count {
-                    // An in-bounds `add` is a true insert, per RFC 6902.
-                    arr.insert(newValue, at: i)
-                } else {
-                    // At or past the end, MLB means "assign at this index".
-                    // Its stream is not RFC 6902 — the reference writes
-                    // `root[accessor] = value` and lets JavaScript grow the
-                    // array, filling the gap with holes that serialise as
-                    // null. Refusing the write instead left us one element
-                    // short of the server for the rest of the game, and every
-                    // later operation on the same array failed too: one live
-                    // game dropped 51 operations behind a single short array.
-                    try JSONValue.grow(&arr, to: i, path: pointer.description)
-                    if i < arr.count { arr[i] = newValue } else { arr.append(newValue) }
-                }
+                // Refusing a write past the end left us one element short of
+                // the server for the rest of the game, and every later
+                // operation on the same array failed too: one live game
+                // dropped 51 operations behind a single short array.
+                try JSONValue.grow(&arr, to: i, path: pointer.description)
+                if i < arr.count { arr[i] = newValue } else { arr.append(newValue) }
                 parent = .array(arr)
 
             case .object(var dict):
@@ -332,40 +351,26 @@ extension JSONValue {
             return
         }
         // Nothing at this path means the remove is already done, however the
-        // path runs out — a missing key, a short array, or a parent that is
-        // null. The checks below cover the first two; a null parent used to
-        // throw "Cannot descend through" and cost a full refetch for a remove
-        // under a matchup we hold as null.
+        // path runs out — a missing key, a short array, or a null parent. The
+        // reference agrees: its splice out of range and `delete root[key]` on
+        // an absent key are both no-ops. Throwing cost a full refetch to reach
+        // a state we were already in — a live game sent
+        // `remove /liveData/plays/currentPlay/result/rbi` against a
+        // currentPlay with no rbi, and that was the game's one hard failure.
+        //
+        // Past this guard the parent exists and holds the target, so the
+        // removes below cannot miss.
         guard value(at: pointer) != nil else { return }
         try withParent(of: pointer) { parent, token in
             switch parent {
             case .array(var arr):
-                guard let i = Int(token) else {
-                    throw JSONPatchError.arrayIndexOutOfBounds(
-                        path: pointer.description, index: -1, count: arr.count
-                    )
-                }
-                // Removing an element that is not there has already been
-                // achieved. The reference splices out of range as a no-op,
-                // and throwing here would cost a full refetch to reach a
-                // state we are already in.
-                guard arr.indices.contains(i) else { return }
-                arr.remove(at: i)
+                if let i = Int(token) { arr.remove(at: i) }
                 parent = .array(arr)
-
             case .object(var dict):
-                // Same reasoning as the array case above, and the same as the
-                // reference, whose `delete root[key]` is a no-op on a key that
-                // is not there. Throwing cost a full refetch to reach a state
-                // we were already in: a live game sent
-                // `remove /liveData/plays/currentPlay/result/rbi` against a
-                // currentPlay with no rbi, and that was the game's one hard
-                // patch failure.
-                guard dict.removeValue(forKey: token) != nil else { return }
+                dict.removeValue(forKey: token)
                 parent = .object(dict)
-
             default:
-                throw JSONPatchError.notTraversable(pointer.description)
+                break
             }
         }
     }
@@ -404,6 +409,9 @@ extension JSONValue {
         _ body: (inout JSONValue) throws -> Void
     ) throws {
         guard let token = path.first else {
+            // A null hole as the write's own parent stands in for an absent
+            // container too; the reference creates one for an undefined parent.
+            if node == .null { node = emptyContainer(for: nextTokenAfterPath) }
             try body(&node)
             return
         }

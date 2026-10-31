@@ -60,8 +60,8 @@ struct ContentView: View {
             LocationFailedView()
                 .environmentObject(app)
 
-        case .notAtBallpark:
-            NotAtBallparkView()
+        case .notAtBallpark(let preciseLocationOff):
+            NotAtBallparkView(preciseLocationOff: preciseLocationOff)
                 .environmentObject(app)
 
         case .scheduleFailed(let venue):

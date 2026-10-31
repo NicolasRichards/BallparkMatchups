@@ -41,13 +41,10 @@ struct SplitPriorityEngine {
         scoreDiff: Int? = nil,
         seasonBaselineOPS: Double?,
         careerBaselineOPS: Double?,
+        batterHand: Handedness? = nil,
         maxCount: Int = 3
     ) -> [SplitLine] {
-        let runners = RunnersState.from(
-            onFirst: tickState.runnersCode.contains("1"),
-            onSecond: tickState.runnersCode.contains("2"),
-            onThird: tickState.runnersCode.contains("3")
-        )
+        let runners = tickState.runners
         let outs = tickState.outs
         let balls = tickState.balls
         let strikes = tickState.strikes
@@ -69,11 +66,12 @@ struct SplitPriorityEngine {
             candidates.append("c\(leverageCount)")
         }
 
-        // Only show the split matching the actual pitcher's hand
+        // Only show the split matching the actual pitcher's hand. An
+        // ambidextrous pitcher throws with the batter's own hand.
         switch pitcherHand {
-        case .left:                  candidates.append("vl")
-        case .right, .switchHitter:  candidates.append("vr")
-        case nil:                    candidates.append("vr")  // default
+        case .left:          candidates.append("vl")
+        case .right, nil:    candidates.append("vr")
+        case .switchHitter:  candidates.append(batterHand == .left ? "vl" : "vr")
         }
 
         if strikes == 2 { candidates.append("2s") }
@@ -113,21 +111,20 @@ struct SplitPriorityEngine {
         currentPitchCount: Int?,
         isReliever: Bool,
         isFirstBatter: Bool,
-        careerOPS: Double?,
         batterHand: Handedness?,
-        scoreDiff: Int? = nil
+        pitcherHand: Handedness? = nil,
+        scoreDiff: Int? = nil,
+        excludedCodes: Set<String> = []
     ) -> SplitLine? {
-        let runners = RunnersState.from(
-            onFirst: tickState.runnersCode.contains("1"),
-            onSecond: tickState.runnersCode.contains("2"),
-            onThird: tickState.runnersCode.contains("3")
-        )
+        let runners = tickState.runners
         let inning = tickState.halfInning
         let isLate = isLateAndClose(halfInning: inning, scoreDiff: scoreDiff)
         let splitMap = Dictionary(grouping: splits, by: \.sitCode)
 
+        // Codes already on the batter's side are skipped, so the next eligible
+        // split is shown instead of none.
         func best(_ code: String) -> SplitLine? {
-            guard let lines = splitMap[code] else { return nil }
+            guard !excludedCodes.contains(code), let lines = splitMap[code] else { return nil }
             return lines.first(where: { $0.isCareer }) ?? lines.first
         }
 
@@ -147,8 +144,13 @@ struct SplitPriorityEngine {
         if runners.hasScoringPosition, let s = best("risp") { return s }
         if isLate, let s = best("lc") { return s }
 
-        // Handedness fallback — match the current batter's hand
-        switch batterHand {
+        // Handedness fallback — match the side the batter is hitting from. A
+        // switch hitter bats left against a right-hander and right against a
+        // lefty; an unknown pitcher is assumed right-handed, as above.
+        let battingSide: Handedness? = batterHand == .switchHitter
+            ? (pitcherHand == .left ? .right : .left)
+            : batterHand
+        switch battingSide {
         case .left:                  if let s = best("vl") ?? best("vr") { return s }
         case .right, .switchHitter:  if let s = best("vr") ?? best("vl") { return s }
         case nil:                    if let s = best("vr") ?? best("vl") { return s }

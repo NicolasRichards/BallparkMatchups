@@ -69,12 +69,13 @@ final class JSONPatchTests: XCTestCase {
         XCTAssertNil(try value(doc, "/stats/hits"))
     }
 
-    /// Mid-array insert never appeared in captured traffic, but the spec defines
-    /// it and the implementation should follow the spec.
-    func testAddInsertsRatherThanOverwrites() throws {
+    /// The reference writes `root[accessor] = value` for add as for replace, so
+    /// an in-bounds add overwrites. RFC 6902 would insert; MLB's stream is not
+    /// RFC 6902.
+    func testInBoundsAddAssignsLikeTheReference() throws {
         var doc = try tree(#"{"a":[1,3]}"#)
         try doc.apply(ops(#"[{"op":"add","path":"/a/1","value":2}]"#))
-        XCTAssertEqual(try value(doc, "/a"), .array([.int(1), .int(2), .int(3)]))
+        XCTAssertEqual(try value(doc, "/a"), .array([.int(1), .int(2)]))
     }
 
     // MARK: RFC 6901 pointers
@@ -217,25 +218,110 @@ final class JSONPatchTests: XCTestCase {
         XCTAssertEqual(arr.count, 4)
     }
 
-    /// An in-bounds `add` is still a true insert, per RFC 6902. This is the
-    /// one place the behaviour deliberately differs from the reference's
-    /// plain assignment, and nothing in the captured traffic exercises it.
-    func testInBoundsAddStillInserts() throws {
-        var doc = try tree(#"{"arr":["a","b","c"]}"#)
-        try doc.apply(ops(#"[{"op":"add","path":"/arr/1","value":"x"}]"#))
+    /// Once growth has padded an array, every hole is in bounds. Inserting
+    /// there shifted the tail right on each descending add and left eight
+    /// elements where the reference leaves five.
+    func testDescendingAddsFillHolesLikeTheReference() throws {
+        var doc = try tree(#"{"a":["e0"]}"#)
+        try doc.apply(ops(#"""
+        [{"op":"add","path":"/a/4","value":"X4"},
+         {"op":"add","path":"/a/3","value":"X3"},
+         {"op":"add","path":"/a/2","value":"X2"},
+         {"op":"add","path":"/a/1","value":"X1"}]
+        """#))
         XCTAssertEqual(
-            try value(doc, "/arr"),
-            .array([.string("a"), .string("x"), .string("b"), .string("c")])
+            try value(doc, "/a"),
+            .array(["e0", "X1", "X2", "X3", "X4"].map { JSONValue.string($0) })
         )
+    }
+
+    func testAscendingAddsPastTheEndAppendInOrder() throws {
+        var doc = try tree(#"{"a":["e0"]}"#)
+        try doc.apply(ops(#"""
+        [{"op":"add","path":"/a/1","value":"X1"},
+         {"op":"add","path":"/a/2","value":"X2"},
+         {"op":"add","path":"/a/3","value":"X3"},
+         {"op":"add","path":"/a/4","value":"X4"}]
+        """#))
+        XCTAssertEqual(
+            try value(doc, "/a"),
+            .array(["e0", "X1", "X2", "X3", "X4"].map { JSONValue.string($0) })
+        )
+    }
+
+    /// A null hole that is the write's own parent, not merely an intermediate,
+    /// must also become a container. `/a/2/k` used to throw "Cannot descend".
+    func testNullHoleAsFinalParentBecomesAContainer() throws {
+        var doc = try tree(#"{"a":["e0"]}"#)
+        try doc.apply(ops(#"""
+        [{"op":"add","path":"/a/3/k","value":3},
+         {"op":"add","path":"/a/2/k","value":2}]
+        """#))
+        XCTAssertEqual(try value(doc, "/a/2"), .object(["k": .int(2)]))
+        XCTAssertEqual(try value(doc, "/a/3"), .object(["k": .int(3)]))
+        XCTAssertEqual(try value(doc, "/a/1"), JSONValue.null)
+
+        var nested = try tree(#"{"a":[null]}"#)
+        try nested.apply(ops(#"[{"op":"add","path":"/a/0/1","value":"x"}]"#))
+        XCTAssertEqual(try value(nested, "/a/0"), .array([.null, .string("x")]))
+    }
+
+    /// A move whose destination cannot be written must not lose its source.
+    func testFailedMoveLeavesTheSourceInPlace() throws {
+        var doc = try tree(#"{"a":{"b":1},"s":"text"}"#)
+        XCTAssertThrowsError(
+            try doc.apply(ops(#"[{"op":"move","from":"/a/b","path":"/s/x"}]"#))
+        )
+        XCTAssertEqual(try value(doc, "/a/b"), .int(1))
+        XCTAssertEqual(try value(doc, "/s"), .string("text"))
     }
 
     /// The index arrives off the network. A gap no real feed could produce is
     /// a corrupt frame, and must not be met by allocating until the app dies.
+    /// It also fails identically on a retry, so it must not be deferred:
+    /// LiveFeedStream refetches on anything that is not worth retrying.
     func testAnAbsurdIndexThrowsRatherThanAllocating() throws {
         var doc = try tree(#"{"arr":[]}"#)
         XCTAssertThrowsError(
             try doc.apply(ops(#"[{"op":"add","path":"/arr/2000000000","value":1}]"#))
-        )
+        ) { error in
+            let patchError = error as? JSONPatchError
+            XCTAssertNotNil(patchError)
+            XCTAssertEqual(patchError?.isWorthRetrying(.add), false)
+        }
+    }
+
+    /// Deferral is kept only for what a later operation in the batch can fix:
+    /// a copy or move whose source does not exist yet.
+    func testOnlyAMissingCopyOrMoveSourceIsWorthRetrying() throws {
+        let missing = JSONPatchError.pathNotFound("/nope")
+        XCTAssertTrue(missing.isWorthRetrying(.copy))
+        XCTAssertTrue(missing.isWorthRetrying(.move))
+        XCTAssertFalse(missing.isWorthRetrying(.add))
+
+        // Each deterministic bounds fault, as the applier actually throws it.
+        let faults: [(String, String)] = [
+            ("/arr/-1", "negative index at the leaf"),
+            ("/arr/-1/k", "negative index while descending"),
+            ("/arr/x/k", "non-numeric token through an array"),
+            ("/arr/20000/k", "gap over the cap while descending"),
+        ]
+        for (path, label) in faults {
+            var doc = try tree(#"{"arr":[]}"#)
+            for kind in ["add", "replace"] {
+                XCTAssertThrowsError(
+                    try doc.apply(ops(#"[{"op":"\#(kind)","path":"\#(path)","value":1}]"#)), label
+                ) { error in
+                    XCTAssertEqual((error as? JSONPatchError)?.isWorthRetrying(.add), false, label)
+                }
+            }
+            var withSource = try tree(#"{"arr":[],"src":1}"#)
+            XCTAssertThrowsError(
+                try withSource.apply(ops(#"[{"op":"copy","from":"/src","path":"\#(path)"}]"#)), label
+            ) { error in
+                XCTAssertEqual((error as? JSONPatchError)?.isWorthRetrying(.copy), false, label)
+            }
+        }
     }
 
     /// A null hole must not take the whole feed down with it: the two decoded

@@ -30,6 +30,9 @@ enum PollSchedule {
         var sawBreakStart: Bool
         /// Injected so the break timer is testable.
         var now: Date = Date()
+        /// The card shows a "Game Over" final whose W/L/SV decisions MLB
+        /// publishes only at "Final", so keep checking for them.
+        var awaitingDecisions = false
     }
 
     /// The seconds to wait. `.infinity` means the game is over and the loop
@@ -73,7 +76,10 @@ enum PollSchedule {
         case .delay, .suspended:
             return input.gameEndAnnounced ? 5 : 60
 
-        case .final_, .postponed, .cancelled:
+        case .final_:
+            return input.awaitingDecisions ? 30 : .infinity
+
+        case .postponed, .cancelled:
             return .infinity
 
         case .loading:

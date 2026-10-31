@@ -221,7 +221,7 @@ struct TickState: Equatable {
     let balls: Int
     let strikes: Int
     let outs: Int
-    let runnersCode: String  // e.g. "_23"
+    let runners: RunnersState
     let inningState: String  // "Top", "Middle", "Bottom", "End"
     let halfInning: Int
 }
@@ -235,7 +235,7 @@ func diffTickState(old: TickState?, new: TickState) -> RefreshKind {
     if new.atBatIndex != old.atBatIndex { return .full }
     if new.batterId != old.batterId { return .full }   // mid-AB pinch hitter
     if new.pitcherId != old.pitcherId { return .full }
-    if new.outs != old.outs || new.runnersCode != old.runnersCode { return .situational }
+    if new.outs != old.outs || new.runners != old.runners { return .situational }
     if new.balls != old.balls || new.strikes != old.strikes { return .countOnly }
     return .none
 }
@@ -245,13 +245,9 @@ func diffTickState(old: TickState?, new: TickState) -> RefreshKind {
 struct CachedVenue: Codable {
     let id: Int
     let name: String
-    let teamName: String?
     let latitude: Double
     let longitude: Double
     let timeZoneIdentifier: String
-    let sportId: Int
-
-    var sportLevel: SportLevel? { SportLevel(rawValue: sportId) }
 }
 
 // MARK: - Game Session Persistence
@@ -260,6 +256,8 @@ struct ActiveSession: Codable {
     let gamePk: Int
     let venueId: Int?
     let resolvedAt: Date
+    /// Set once the game has ended; any value means over. Older builds wrote
+    /// the status name here, so the type stays a string.
     var lastKnownState: String?
 }
 
@@ -332,7 +330,9 @@ enum AppState {
     case game
     case locationDenied
     case locationFailed
-    case notAtBallpark
+    /// No venue matched. With Precise Location off the fix is too coarse to
+    /// match one, so the screen asks for it instead of saying "not at a park".
+    case notAtBallpark(preciseLocationOff: Bool)
     /// Location matched a ballpark but its schedule couldn't be loaded.
     case scheduleFailed(CachedVenue)
 }

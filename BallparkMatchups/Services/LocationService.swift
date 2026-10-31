@@ -2,7 +2,9 @@ import Foundation
 import CoreLocation
 
 enum LocationResult {
-    case success(CLLocationCoordinate2D)
+    /// `isPrecise` is false when Precise Location is off. That fix can be
+    /// kilometres out, far beyond the venue match radius.
+    case success(CLLocationCoordinate2D, isPrecise: Bool)
     case denied
     case failed(Error?)
     case timeout
@@ -44,6 +46,10 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
             break
         }
 
+        if manager.accuracyAuthorization == .reducedAccuracy {
+            await requestTemporaryFullAccuracy()
+        }
+
         // If a previous request is still pending, resolve it before storing a new
         // continuation — overwriting it would strand the earlier caller forever.
         if let pending = continuation {
@@ -63,9 +69,10 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.first else { return }
+        let isPrecise = manager.accuracyAuthorization == .fullAccuracy
         Task { @MainActor in
             self.timeoutTask?.cancel()
-            self.continuation?.resume(returning: .success(location.coordinate))
+            self.continuation?.resume(returning: .success(location.coordinate, isPrecise: isPrecise))
             self.continuation = nil
         }
     }
@@ -90,6 +97,16 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     // MARK: - Private
+
+    /// Asks for precise location for this session; the key names the purpose
+    /// string in Info.plist's NSLocationTemporaryUsageDescriptionDictionary.
+    private func requestTemporaryFullAccuracy() async {
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            manager.requestTemporaryFullAccuracyAuthorization(withPurposeKey: "BallparkDetection") { @Sendable _ in
+                cont.resume()
+            }
+        }
+    }
 
     private func startTimeout() {
         timeoutTask = Task {

@@ -287,26 +287,53 @@ struct ScheduleFailedView: View {
 
 struct NotAtBallparkView: View {
     @EnvironmentObject private var app: AppViewModel
+    let preciseLocationOff: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("NOT AT A BALLPARK")
-                    .primaryFont(size: 20, weight: .bold)
-                Text("You're not currently at an MLB or MiLB venue.\nOpen this app at the game for live matchup data.")
-                    .labelFont(size: 15)
-                    .fixedSize(horizontal: false, vertical: true)
+                if preciseLocationOff {
+                    Text("PRECISE LOCATION NEEDED")
+                        .primaryFont(size: 20, weight: .bold)
+                    Text("Precise Location is off, so BallparkMatchups can't tell which ballpark you're at. Turn it on in Settings, or pick your game from the list.")
+                        .labelFont(size: 15)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("NOT AT A BALLPARK")
+                        .primaryFont(size: 20, weight: .bold)
+                    Text("You're not currently at an MLB or MiLB venue.\nOpen this app at the game for live matchup data.")
+                        .labelFont(size: 15)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
-            Button {
-                app.state = .browseGames
-            } label: {
-                Text("Browse today's games")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Theme.primaryText)
-                    .foregroundColor(.black)
-                    .font(.system(size: 17, weight: .semibold))
+            VStack(spacing: 12) {
+                if preciseLocationOff {
+                    Button {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        Text("Open Settings")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Theme.primaryText)
+                            .foregroundColor(.black)
+                            .font(.system(size: 17, weight: .semibold))
+                    }
+                }
+
+                Button {
+                    app.state = .browseGames
+                } label: {
+                    Text("Browse today's games")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(preciseLocationOff ? Theme.situationBackground : Theme.primaryText)
+                        .foregroundColor(preciseLocationOff ? Theme.primaryText : .black)
+                        .font(.system(size: 17, weight: .semibold))
+                        .overlay(Rectangle().stroke(Color(hex: "#333333"), lineWidth: preciseLocationOff ? 1 : 0))
+                }
             }
         }
         .padding(24)

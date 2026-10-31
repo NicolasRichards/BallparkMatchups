@@ -78,17 +78,33 @@ struct AboutView: View {
                     Text("Thank you so much. 💛")
                         .primaryFont(size: 15)
                         .padding(.vertical, 8)
-                } else if tipJar.loadFailed {
-                    Text("Tip options couldn't load right now.")
-                        .labelFont(size: 13)
-                        .padding(.vertical, 8)
-                } else if tipJar.products.isEmpty {
+                } else if tipJar.products.isEmpty && !tipJar.loadFailed {
                     ProgressView()
                         .tint(Theme.secondaryText)
                         .padding(.vertical, 12)
                 } else {
                     ForEach(tipJar.products, id: \.id) { product in
                         tipRow(balls: ballCount(for: product), product: product)
+                    }
+                    if tipJar.loadFailed {
+                        HStack(spacing: 12) {
+                            Text(tipJar.products.isEmpty
+                                 ? "Tip options couldn't load right now."
+                                 : "Some tip options couldn't load right now.")
+                                .labelFont(size: 13)
+                            Spacer()
+                            Button("Retry") {
+                                Task { await tipJar.load() }
+                            }
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(Theme.primaryText)
+                            .disabled(tipJar.isLoading)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                    if tipJar.purchaseFailed {
+                        Text("That purchase couldn't be completed.")
+                            .labelFont(size: 13)
                     }
                 }
             }

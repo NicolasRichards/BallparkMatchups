@@ -280,9 +280,12 @@ runs each one through **both** implementations and compares.
 
 Three consequences worth knowing:
 
-- An in-bounds `add` is still a true insert (RFC 6902). This is the one place
-  we deliberately differ from the reference's plain assignment, and nothing in
-  the captured traffic exercises it.
+- An in-bounds `add` assigns, like the reference, rather than inserting
+  (RFC 6902). `copy` and `move` write the same way. Inserting used to diverge
+  once growth had padded an array: every hole is in bounds, so descending adds
+  (`/a/4`, `/a/3`, …) on `["e0"]` shifted the tail and left 8 elements where
+  the reference leaves 5. Changed 2026-10-31; `Tools/diffpatch-verify`'s JS
+  port still splices and needs the same change.
 - The two decoded arrays in the live feed — `allPlays` and `boxscore…pitchers`
   — now hold **optional** elements. A null hole would otherwise throw during
   decode and fail the whole feed, which would have been worse than the drop.
@@ -290,15 +293,19 @@ Three consequences worth knowing:
   frame naming index 2,000,000,000 must not be met by allocating until the app
   dies. Beyond the cap it throws, and the caller refetches.
 
-Holes self-heal: `descend` already replaces a null placeholder with a real
-container when a later operation writes into that slot.
+Holes self-heal: `descend` replaces a null placeholder with a real container
+when a later operation writes into that slot — including, since 2026-10-31,
+when the hole is the write's immediate parent (`add /a/2/k` used to throw).
 
-### Not fixed, deliberately
+### Deferral tightened, 2026-10-31
 
-`isWorthRetrying` still defers `arrayIndexOutOfBounds`. Growth should mean it
-never fires, but a deferred-then-dropped operation is cheap and a hard failure
-costs a full refetch and counts toward the kill switch. The deferral stays as
-a net rather than being tightened on the strength of an untested prediction.
+`isWorthRetrying` used to defer `arrayIndexOutOfBounds` as a net. After growth
+that error comes only from deterministic faults — a negative index, a
+non-numeric token through an array, a gap over the cap — which fail
+identically on retry, so the operation was silently dropped with no refetch.
+They now refetch. Only a `copy`/`move` whose source is missing is deferred,
+and only that is dropped if the retry also misses; any other retry failure
+refetches.
 
 ## Third full game, 2026-10-06 — the growth fix measured
 

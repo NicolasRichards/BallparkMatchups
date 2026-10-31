@@ -135,13 +135,20 @@ for (const [feedFile, diffFile] of [
   }
 }
 
-// An in-bounds `add` is still a true insert, which is where we deliberately
-// part company with the reference's plain assignment.
+// Every array write assigns, like the reference — in bounds too.
 {
   const doc = { arr: ['a', 'b', 'c'] };
   mine.apply(doc, [{ op: 'add', path: '/arr/1', value: 'x' }]);
-  check('grow: in-bounds add still inserts',
-    JSON.stringify(doc.arr) === JSON.stringify(['a', 'x', 'b', 'c']), JSON.stringify(doc.arr));
+  check('grow: in-bounds add assigns',
+    JSON.stringify(doc.arr) === JSON.stringify(['a', 'x', 'c']), JSON.stringify(doc.arr));
+}
+
+// Descending adds into a grown array fill its holes instead of shifting.
+{
+  const doc = { arr: ['e0'] };
+  mine.apply(doc, [4, 3, 2, 1].map(i => ({ op: 'add', path: `/arr/${i}`, value: `X${i}` })));
+  check('grow: descending adds fill holes',
+    JSON.stringify(doc.arr) === JSON.stringify(['e0', 'X1', 'X2', 'X3', 'X4']), JSON.stringify(doc.arr));
 }
 
 // A gap no real feed could produce is a corrupt frame, not an array to build.

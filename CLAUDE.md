@@ -13,7 +13,7 @@ The owner runs Claude Code locally on a Mac, in the project folder, and opens th
 
 ## Layout
 
-- `BallparkMatchups/API`: network (`MLBAPIClient` is an actor), Gameday websocket, `JSONValue` (raw JSON tree plus RFC 6902 patching)
+- `BallparkMatchups/API`: network (`MLBAPIClient` is an actor), Gameday websocket, `JSONValue` (raw JSON tree plus JSON-patch application that follows MLB's reference applier, which assigns at an array index rather than inserting as RFC 6902 does; see `Tools/PUSH-FEED-STATUS.md`)
 - `BallparkMatchups/ViewModels`: `AppViewModel` (top-level state) and `GameViewModel` (per-game polling, diffing, split selection)
 - `BallparkMatchups/Services`: feature flags, location, venue cache, `SplitPriorityEngine`
 - `BallparkMatchups/Models`, `Views`, `Resources` (`venues.json`, `situationCodes.json`)
@@ -22,7 +22,7 @@ The owner runs Claude Code locally on a Mac, in the project folder, and opens th
 
 ## Conventions
 
-- "Today" rolls over at 3 a.m. Eastern for every venue (`todayDateString()` in `AppViewModel` and `VenueCache`), so late West Coast games stay listed after local midnight. It is not the venue's or the device's time zone.
+- "Today" rolls over at 3 a.m. Eastern for every venue (`APIDates.todayString()` in `Services/APIDates.swift`, the one place it is computed), so late West Coast games stay listed after local midnight. It is not the venue's or the device's time zone.
 - Split display thresholds live in `Models/SplitThresholds.swift`; the README "Data Notes" section describes the intended values.
 - Version bumps are their own commits, titled like `Bump to 1.6 (8)`.
 - Commit messages are short imperative sentences describing what changed.

@@ -53,9 +53,10 @@ function descend(root, path, nextTokenAfterPath, fullPath) {
         throw new PatchError(`arrayIndexOutOfBounds ${fullPath} idx=${token} count=${node.length}`);
       grow(node, i, fullPath);
       if (i === node.length) node.push(emptyContainer(childShapeHint));
+      else if (node[i] === null) node[i] = emptyContainer(childShapeHint);  // a hole
       node = node[i];
     } else if (node !== null && typeof node === 'object') {
-      if (node[token] === undefined) node[token] = emptyContainer(childShapeHint);
+      if (node[token] === undefined || node[token] === null) node[token] = emptyContainer(childShapeHint);
       node = node[token];
     } else {
       throw new PatchError('notTraversable ' + fullPath);
@@ -64,7 +65,7 @@ function descend(root, path, nextTokenAfterPath, fullPath) {
   return node;
 }
 
-function setValue(root, tokens, newValue, insert, fullPath) {
+function setValue(root, tokens, newValue, fullPath) {
   if (tokens.length === 0) throw new PatchError('emptyPath');
   const leaf = tokens[tokens.length - 1];
   const parent = descend(root, tokens.slice(0, -1), leaf, fullPath);
@@ -73,14 +74,10 @@ function setValue(root, tokens, newValue, insert, fullPath) {
     if (!Number.isInteger(i)) throw new PatchError('notTraversable ' + fullPath);
     if (i < 0)
       throw new PatchError(`arrayIndexOutOfBounds ${fullPath} idx=${i} count=${parent.length}`);
-    if (insert && i < parent.length) {
-      parent.splice(i, 0, newValue);  // in-bounds add is a true insert
-    } else {
-      // At or past the end MLB means "assign here"; the reference lets
-      // JavaScript grow the array, leaving holes that stringify as null.
-      grow(parent, i, fullPath);
-      if (i < parent.length) parent[i] = newValue; else parent.push(newValue);
-    }
+    // MLB's reference assigns (`root[accessor] = value`) for every write,
+    // in bounds or past the end, letting JavaScript grow the array with holes.
+    grow(parent, i, fullPath);
+    if (i < parent.length) parent[i] = newValue; else parent.push(newValue);
   } else if (parent !== null && typeof parent === 'object') {
     parent[leaf] = newValue;
   } else throw new PatchError('notTraversable ' + fullPath);
@@ -88,17 +85,11 @@ function setValue(root, tokens, newValue, insert, fullPath) {
 
 function removeValue(root, tokens, fullPath) {
   if (tokens.length === 0) throw new PatchError('emptyPath');
+  if (valueAt(root, tokens) === undefined) return;   // already absent — no-op, as in Swift
   const leaf = tokens[tokens.length - 1];
-  const parent = descend(root, tokens.slice(0, -1), leaf, fullPath);
-  if (Array.isArray(parent)) {
-    const i = Number(leaf);
-    if (!Number.isInteger(i))
-      throw new PatchError(`arrayIndexOutOfBounds ${fullPath} idx=${leaf} count=${parent.length}`);
-    if (i < 0 || i >= parent.length) return;   // already absent — no-op
-    parent.splice(i, 1);
-  } else if (parent !== null && typeof parent === 'object') {
-    delete parent[leaf];   // absent key: a no-op, as in the reference
-  } else throw new PatchError('notTraversable ' + fullPath);
+  const parent = valueAt(root, tokens.slice(0, -1));
+  if (Array.isArray(parent)) parent.splice(Number(leaf), 1);
+  else delete parent[leaf];
 }
 
 function applyOne(root, op) {
@@ -113,7 +104,7 @@ function applyOne(root, op) {
     case 'add':
     case 'replace': {
       if (!('value' in op)) throw new PatchError('missingValue ' + op.path);
-      setValue(root, pt, op.value, op.op === 'add', op.path);
+      setValue(root, pt, op.value, op.path);
       return;
     }
     case 'remove':
@@ -123,15 +114,19 @@ function applyOne(root, op) {
       if (op.from === undefined) throw new PatchError('missingFrom ' + op.path);
       const copied = valueAt(root, pointerTokens(op.from));
       if (copied === undefined) throw new PatchError('pathNotFound ' + op.from);
-      setValue(root, pt, JSON.parse(JSON.stringify(copied)), true, op.path);
+      setValue(root, pt, JSON.parse(JSON.stringify(copied)), op.path);
       return;
     }
     case 'move': {
       if (op.from === undefined) throw new PatchError('missingFrom ' + op.path);
       const moved = valueAt(root, pointerTokens(op.from));
       if (moved === undefined) throw new PatchError('pathNotFound ' + op.from);
-      removeValue(root, pointerTokens(op.from), op.from);
-      setValue(root, pt, moved, true, op.path);
+      // Atomic like Swift's move: work on a copy and keep it only if both steps succeed.
+      const working = JSON.parse(JSON.stringify(root));
+      removeValue(working, pointerTokens(op.from), op.from);
+      setValue(working, pt, moved, op.path);
+      for (const key of Object.keys(root)) delete root[key];
+      Object.assign(root, working);
       return;
     }
     default:

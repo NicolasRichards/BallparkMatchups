@@ -43,8 +43,6 @@ struct FinalInfo {
     let homeScore: Int
     let awayScore: Int
     let winnerName: String?
-    let winnerRecord: String?
     let loserName: String?
-    let loserRecord: String?
     let saveName: String?
 }

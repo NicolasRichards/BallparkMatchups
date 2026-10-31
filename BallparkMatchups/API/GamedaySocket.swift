@@ -92,9 +92,10 @@ actor GamedaySocket {
 
     /// Duplicate suppression. Gameday occasionally sends the same update twice
     /// with different `updateId`s, microseconds apart. They are identical
-    /// otherwise, so timestamp plus payload size separates them reliably.
-    private var lastTimeStamp: String?
-    private var lastPayloadLength: Int?
+    /// otherwise, so the frame minus its `updateId` separates them — size alone
+    /// did not, as `timeStamp` is to the second and two distinct updates in one
+    /// second can easily be the same length.
+    private var lastFingerprint: JSONValue?
 
     private var reconnectAttempt = 0
     private var hasReceivedFrame = false
@@ -125,6 +126,8 @@ actor GamedaySocket {
         continuation.onTermination = { [weak self] _ in
             Task { await self?.close() }
         }
+        // Closed before anyone listened: end the stream rather than leave it open.
+        if closed { continuation.finish() }
         connect()
         return stream
     }
@@ -226,19 +229,29 @@ actor GamedaySocket {
             return
         }
 
-        // Only dedupe when there is a timestamp to compare; two distinct
-        // frames that both omit it would otherwise collide on length alone.
-        if let ts = event.timeStamp, lastTimeStamp == ts, lastPayloadLength == data.count {
+        let fingerprint = Self.duplicateFingerprint(of: data)
+        if let fingerprint, fingerprint == lastFingerprint {
             return
         }
-        lastTimeStamp = event.timeStamp
-        lastPayloadLength = data.count
+        lastFingerprint = fingerprint
 
         if event.isGameFinished {
             continuation?.yield(.gameFinished)
             return
         }
         continuation?.yield(.update(event))
+    }
+
+    /// The frame with `updateId` removed, which is all a duplicate differs by.
+    ///
+    /// Nil when the frame carries no `timeStamp`: only dedupe when there is a
+    /// timestamp to compare, as the remainder of two distinct untimed frames
+    /// can be identical.
+    static func duplicateFingerprint(of data: Data) -> JSONValue? {
+        guard case .object(var fields)? = try? JSONValue.parse(data),
+              case .string? = fields["timeStamp"] else { return nil }
+        fields.removeValue(forKey: "updateId")
+        return .object(fields)
     }
 
     /// Close code plus the underlying error, which is the only thing that

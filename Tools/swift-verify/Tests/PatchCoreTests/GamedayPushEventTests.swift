@@ -79,4 +79,23 @@ final class GamedayPushEventTests: XCTestCase {
         XCTAssertFalse(ordinary.isFullRefresh)
         XCTAssertFalse(ordinary.isGameFinished)
     }
+
+    // MARK: Duplicate suppression
+
+    /// Gameday's duplicates differ only by updateId; distinct updates in the
+    /// same second can match on timestamp and length, and must both survive.
+    func testDuplicateFingerprintIgnoresOnlyTheUpdateId() throws {
+        func fingerprint(_ json: String) -> JSONValue? {
+            GamedaySocket.duplicateFingerprint(of: Data(json.utf8))
+        }
+        let first = fingerprint(#"{"updateId":"aaaa","timeStamp":"20261005_190000","logicalEvents":["count11"]}"#)
+        let duplicate = fingerprint(#"{"updateId":"bbbb","timeStamp":"20261005_190000","logicalEvents":["count11"]}"#)
+        let sameLength = fingerprint(#"{"updateId":"cccc","timeStamp":"20261005_190000","logicalEvents":["count12"]}"#)
+        XCTAssertNotNil(first)
+        XCTAssertEqual(first, duplicate)
+        XCTAssertNotEqual(first, sameLength)
+
+        // No timestamp, no dedupe.
+        XCTAssertNil(fingerprint(#"{"updateId":"dddd","logicalEvents":["count11"]}"#))
+    }
 }

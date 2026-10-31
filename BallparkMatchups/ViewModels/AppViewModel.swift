@@ -44,11 +44,11 @@ final class AppViewModel: ObservableObject {
         state = .locating
         let result = await location.requestLocation()
         switch result {
-        case .success(let coord):
+        case .success(let coord, let isPrecise):
             let matches = await venueCache.match(coordinate: coord)
             switch matches.count {
             case 0:
-                state = .notAtBallpark
+                state = .notAtBallpark(preciseLocationOff: !isPrecise)
             case 1:
                 await resolveVenue(matches[0])
             default:
@@ -69,7 +69,7 @@ final class AppViewModel: ObservableObject {
         noGameVenue = nil
         nextHomeGame = nil
         locationVenue = venue
-        let dateString = venue.todayDateString()
+        let dateString = APIDates.todayString()
         state = .loadingGame(gamePk: 0)
         do {
             let schedule = try await api.fetchSchedule(date: dateString, venueId: venue.id)
@@ -94,7 +94,7 @@ final class AppViewModel: ObservableObject {
     func loadBrowseGames() async {
         browseLoading = true
         defer { browseLoading = false }
-        let dateString = todayDateString()
+        let dateString = APIDates.todayString()
         do {
             let schedule = try await api.fetchSchedule(date: dateString)
             browseGames = schedule.validGames.compactMap { mapToSummary($0) }
@@ -136,17 +136,14 @@ final class AppViewModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] newState in
                 guard let self else { return }
-                let label: String?
                 switch newState {
-                case .final_:     label = "Final"
-                case .postponed:  label = "Postponed"
-                case .cancelled:  label = "Cancelled"
-                case .suspended:  label = "Suspended"
-                default:          label = nil
-                }
-                if let label, var session = self.loadSession() {
-                    session.lastKnownState = label
-                    self.saveSession(session)
+                case .final_, .postponed, .cancelled, .suspended:
+                    if var session = self.loadSession(), session.lastKnownState == nil {
+                        session.lastKnownState = "over"
+                        self.saveSession(session)
+                    }
+                default:
+                    break
                 }
             }
     }
@@ -165,10 +162,7 @@ final class AppViewModel: ObservableObject {
         guard let session = loadSession() else { return }
         let age = Date().timeIntervalSince(session.resolvedAt)
         guard age < 6 * 3600 else { clearSession(); return }
-        if let last = session.lastKnownState,
-           ["Final", "Game Over", "Completed Early", "Postponed", "Cancelled", "Suspended"].contains(last) {
-            clearSession(); return
-        }
+        guard session.lastKnownState == nil else { clearSession(); return }
         let venueName: String
         if let vid = session.venueId, let venue = await venueCache.venue(id: vid) {
             venueName = venue.name
@@ -212,21 +206,12 @@ final class AppViewModel: ObservableObject {
     // MARK: - Next Home Game
 
     private func fetchNextHomeGame(for venue: CachedVenue) async {
-        // Use a schedule range search for the venue
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MM/dd/yyyy"
-        // POSIX locale: API dates must not depend on the device's calendar setting
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        let start = formatter.string(from: Date())
-        let end: String = {
-            let future = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
-            return formatter.string(from: future)
-        }()
-        let urlString = "https://statsapi.mlb.com/api/v1/schedule?sportId=1,11,12,13,14,17&venueIds=\(venue.id)&startDate=\(start)&endDate=\(end)&hydrate=team&gameTypes=R,F,D,L,W"
-        guard let url = URL(string: urlString) else { return }
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            let resp = try JSONDecoder().decode(ScheduleResponse.self, from: data)
+            let resp = try await api.fetchSchedule(
+                venueId: venue.id,
+                startDate: APIDates.todayString(),
+                endDate: APIDates.todayString(offsetDays: 30)
+            )
             let future = resp.validGames.filter { !$0.status.isOver }
             if let first = future.first {
                 nextHomeGame = mapToSummary(first)
@@ -237,9 +222,7 @@ final class AppViewModel: ObservableObject {
     // MARK: - Helpers
 
     private func mapToSummary(_ game: ScheduleResponse.ScheduleGame) -> GameSummary? {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime]
-        guard let gameDate = dateFormatter.date(from: game.gameDate) else { return nil }
+        guard let gameDate = APIDates.parseISO(game.gameDate) else { return nil }
 
         let sportId = game.teams.home.team.sport?.id ?? 1
 
@@ -263,24 +246,6 @@ final class AppViewModel: ObservableObject {
             isOver: game.status.isOver,
             startTimeTBD: game.status.startTimeTBD == true
         )
-    }
-
-    private func todayDateString() -> String {
-        // Baseball day rolls over at 3am ET so late West Coast games
-        // remain visible after local midnight.
-        let etZone = TimeZone(identifier: "America/New_York") ?? .current
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = etZone
-        let hourET = cal.component(.hour, from: Date())
-        let base = hourET < 3
-            ? cal.date(byAdding: .day, value: -1, to: Date()) ?? Date()
-            : Date()
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = etZone
-        // POSIX locale: API dates must not depend on the device's calendar setting
-        f.locale = Locale(identifier: "en_US_POSIX")
-        return f.string(from: base)
     }
 
     // MARK: - Session Persistence

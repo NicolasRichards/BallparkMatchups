@@ -70,6 +70,7 @@ resolve to `none` and cost nothing further.
 - Pre-game < 15 min: 30s
 - Pre-game > 15 min: 5 min
 - Delay/Suspended: 60s
+- Game Over: 30s until "Final" (or W/L/SV decisions appear), for up to 15 min
 - Final/Postponed: stopped (the loop terminates)
 
 ---

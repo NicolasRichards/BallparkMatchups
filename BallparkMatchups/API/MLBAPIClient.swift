@@ -6,6 +6,12 @@ actor MLBAPIClient {
     private let baseURL = "https://statsapi.mlb.com"
     private let session: URLSession
 
+    /// Every league the app covers, as the API's sportId list.
+    static let sportIds = SportLevel.allCases.map { String($0.rawValue) }.joined(separator: ",")
+    /// Regular season and every round of the postseason.
+    static let gameTypes = ["R", "F", "D", "L", "W"]
+    private static let gameTypesParam = gameTypes.joined(separator: ",")
+
     private init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 15
@@ -18,17 +24,23 @@ actor MLBAPIClient {
     // Gregorian explicitly: Calendar.current follows the user's calendar
     // setting, and the Japanese or Buddhist calendar would give 8 or 2569.
     func fetchVenues(season: Int = Calendar(identifier: .gregorian).component(.year, from: Date())) async throws -> VenueListResponse {
-        let url = "\(baseURL)/api/v1/venues?sportIds=1,11,12,13,14,17&hydrate=location,timezone&season=\(season)"
+        let url = "\(baseURL)/api/v1/venues?sportIds=\(Self.sportIds)&hydrate=location,timezone&season=\(season)"
         return try await fetch(VenueListResponse.self, from: url)
     }
 
     // MARK: - Schedule
 
     func fetchSchedule(date: String, venueId: Int? = nil) async throws -> ScheduleResponse {
-        var url = "\(baseURL)/api/v1/schedule?sportId=1,11,12,13,14,17&date=\(date)&hydrate=probablePitcher,team,linescore&gameTypes=R,F,D,L,W"
+        var url = "\(baseURL)/api/v1/schedule?sportId=\(Self.sportIds)&date=\(date)&hydrate=probablePitcher,team,linescore&gameTypes=\(Self.gameTypesParam)"
         if let id = venueId {
             url += "&venueIds=\(id)"
         }
+        return try await fetch(ScheduleResponse.self, from: url)
+    }
+
+    /// One venue's games over a range of yyyy-MM-dd dates, inclusive.
+    func fetchSchedule(venueId: Int, startDate: String, endDate: String) async throws -> ScheduleResponse {
+        let url = "\(baseURL)/api/v1/schedule?sportId=\(Self.sportIds)&venueIds=\(venueId)&startDate=\(startDate)&endDate=\(endDate)&hydrate=team&gameTypes=\(Self.gameTypesParam)"
         return try await fetch(ScheduleResponse.self, from: url)
     }
 
@@ -131,8 +143,6 @@ actor MLBAPIClient {
         return try await fetch(StatsResponse.self, from: url)
     }
 
-    // MARK: - Team Metadata
-
     // MARK: - Player Metadata
 
     func fetchPlayer(id: Int) async throws -> PlayerResponse {
@@ -191,7 +201,6 @@ enum APIError: LocalizedError {
     case networkError(Error)
     case decodingError(DecodingError)
     case httpError(Int)
-    case noData
 
     var errorDescription: String? {
         switch self {
@@ -199,7 +208,6 @@ enum APIError: LocalizedError {
         case .networkError(let e): return e.localizedDescription
         case .decodingError: return "Data parse error"
         case .httpError(let code): return "Server error \(code)"
-        case .noData: return "No data"
         }
     }
 }
@@ -217,7 +225,7 @@ extension ScheduleResponse {
     static let fallLeagueId = 119
 
     var validGames: [ScheduleGame] {
-        let validTypes = Set(["R", "F", "D", "L", "W"])
+        let validTypes = Set(MLBAPIClient.gameTypes)
         return allGames.filter { validTypes.contains($0.gameType) && $0.isSupportedLeague }
     }
 }

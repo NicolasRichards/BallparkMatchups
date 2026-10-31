@@ -33,22 +33,9 @@ actor VenueCache {
         if needsRefresh {
             do {
                 let response = try await MLBAPIClient.shared.fetchVenues()
-                let mapped = response.venues.compactMap { detail -> CachedVenue? in
-                    guard
-                        let coords = detail.location?.defaultCoordinates,
-                        let tzId = detail.timeZone?.id,
-                        detail.active != false
-                    else { return nil }
-                    return CachedVenue(
-                        id: detail.id,
-                        name: detail.name,
-                        teamName: nil,
-                        latitude: coords.latitude,
-                        longitude: coords.longitude,
-                        timeZoneIdentifier: tzId,
-                        sportId: 1  // can't determine from venue API alone; schedule will clarify
-                    )
-                }
+                let mapped = response.venues
+                    .filter { $0.active != false }
+                    .compactMap(CachedVenue.init(detail:))
                 if !mapped.isEmpty {
                     venues = mapped
                     lastRefreshDate = Date()
@@ -81,21 +68,7 @@ actor VenueCache {
         do {
             let data = try Data(contentsOf: url)
             let response = try JSONDecoder().decode(VenueListResponse.self, from: data)
-            venues = response.venues.compactMap { detail -> CachedVenue? in
-                guard
-                    let coords = detail.location?.defaultCoordinates,
-                    let tzId = detail.timeZone?.id
-                else { return nil }
-                return CachedVenue(
-                    id: detail.id,
-                    name: detail.name,
-                    teamName: nil,
-                    latitude: coords.latitude,
-                    longitude: coords.longitude,
-                    timeZoneIdentifier: tzId,
-                    sportId: 1
-                )
-            }
+            venues = response.venues.compactMap(CachedVenue.init(detail:))
         } catch {}
     }
 
@@ -121,27 +94,20 @@ actor VenueCache {
     }
 }
 
-// MARK: - Timezone Helper
+// MARK: - Mapping
 
 extension CachedVenue {
-    var timeZone: TimeZone {
-        TimeZone(identifier: timeZoneIdentifier) ?? .current
-    }
-
-    func todayDateString() -> String {
-        // Roll over at 3am ET, not local midnight, so late games stay findable.
-        let etZone = TimeZone(identifier: "America/New_York") ?? .current
-        var etCal = Calendar(identifier: .gregorian)
-        etCal.timeZone = etZone
-        let hourET = etCal.component(.hour, from: Date())
-        let base = hourET < 3
-            ? etCal.date(byAdding: .day, value: -1, to: Date()) ?? Date()
-            : Date()
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = etZone
-        // POSIX locale: API dates must not depend on the device's calendar setting
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        return formatter.string(from: base)
+    /// nil for a venue without coordinates or a time zone.
+    init?(detail: VenueListResponse.VenueDetail) {
+        guard let coords = detail.location?.defaultCoordinates,
+              let tzId = detail.timeZone?.id
+        else { return nil }
+        self.init(
+            id: detail.id,
+            name: detail.name,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            timeZoneIdentifier: tzId
+        )
     }
 }
