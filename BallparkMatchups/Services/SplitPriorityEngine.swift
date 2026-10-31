@@ -21,12 +21,24 @@ struct SplitPriorityEngine {
         "pi076", "pi091", "pi106", "pi121"
     ]
 
+    /// "Late & Close": 7th inning or later with the score within this many runs.
+    /// With a tied or one-run game the tying run is always in play; at three
+    /// runs it can still be on deck, which is how MLB's own split is defined.
+    static let lateCloseMaxRunDiff = 3
+
+    /// `scoreDiff` is the absolute run difference; nil (score unknown) keeps
+    /// Late & Close eligible rather than hiding it.
+    static func isLateAndClose(halfInning: Int, scoreDiff: Int?) -> Bool {
+        halfInning >= 7 && (scoreDiff ?? 0) <= lateCloseMaxRunDiff
+    }
+
     // MARK: - Batter Split Selection (§10.4)
 
     static func selectBatterSplits(
         tickState: TickState,
         splits: [SplitLine],
         pitcherHand: Handedness?,
+        scoreDiff: Int? = nil,
         seasonBaselineOPS: Double?,
         careerBaselineOPS: Double?,
         maxCount: Int = 3
@@ -40,10 +52,8 @@ struct SplitPriorityEngine {
         let balls = tickState.balls
         let strikes = tickState.strikes
         let inning = tickState.halfInning
-        let isLate = inning >= 7
+        let isLate = isLateAndClose(halfInning: inning, scoreDiff: scoreDiff)
 
-        // Determine score delta for lc (late & close = within 3 runs)
-        // We don't have score here; include lc candidates and let caller filter
         // Build ordered priority list of sitCodes to try
         var candidates: [String] = []
 
@@ -104,7 +114,8 @@ struct SplitPriorityEngine {
         isReliever: Bool,
         isFirstBatter: Bool,
         careerOPS: Double?,
-        batterHand: Handedness?
+        batterHand: Handedness?,
+        scoreDiff: Int? = nil
     ) -> SplitLine? {
         let runners = RunnersState.from(
             onFirst: tickState.runnersCode.contains("1"),
@@ -112,7 +123,7 @@ struct SplitPriorityEngine {
             onThird: tickState.runnersCode.contains("3")
         )
         let inning = tickState.halfInning
-        let isLate = inning >= 7
+        let isLate = isLateAndClose(halfInning: inning, scoreDiff: scoreDiff)
         let splitMap = Dictionary(grouping: splits, by: \.sitCode)
 
         func best(_ code: String) -> SplitLine? {

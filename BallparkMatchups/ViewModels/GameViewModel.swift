@@ -884,11 +884,13 @@ final class GameViewModel: ObservableObject {
     ) -> (batterSplits: [SplitLine], pitcherSplit: SplitLine?, candidateCount: Int) {
         let pitcherHand = playerCache[tick.pitcherId]?.pitchHand
         let batterHand = playerCache[tick.batterId]?.batSide
+        let scoreDiff = scoreDisplay.map { abs($0.homeScore - $0.awayScore) }
 
         let batter3 = SplitPriorityEngine.selectBatterSplits(
             tickState: tick,
             splits: batterSplits,
             pitcherHand: pitcherHand,
+            scoreDiff: scoreDiff,
             seasonBaselineOPS: baselines.season,
             careerBaselineOPS: baselines.career,
             maxCount: 3
@@ -904,7 +906,8 @@ final class GameViewModel: ObservableObject {
             isReliever: isReliever,
             isFirstBatter: isFirstBatter,
             careerOPS: nil,
-            batterHand: batterHand
+            batterHand: batterHand,
+            scoreDiff: scoreDiff
         ).flatMap { card in
             if handednessCodes.contains(card.sitCode) { return card }
             return batter3.contains(where: { $0.sitCode == card.sitCode }) ? nil : card
