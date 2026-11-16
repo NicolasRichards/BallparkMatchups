@@ -44,7 +44,12 @@ enum PollSchedule {
                 let mins = fp.timeIntervalSince(input.now) / 60
                 return mins < 15 ? 30 : 300
             }
-            return 300
+            // No start time: game 2 of a doubleheader begins whenever game 1
+            // lets it. Every 30s is hundreds of requests through game 1, and
+            // every 5 minutes left the card on "First pitch time TBD" for up
+            // to five minutes after play began whenever the socket was not
+            // there to say so. A minute bounds both.
+            return 60
 
         case .live:
             // Once the socket has said the game is over it has also closed, so
@@ -57,12 +62,17 @@ enum PollSchedule {
             return input.pushIsHealthy ? 60 : 5
 
         case .betweenInnings(let info):
+            if input.gameEndAnnounced { return 5 }
             // The last out of the last scheduled inning looks exactly like any
             // other break, but no inning follows it, so the two-minute timer
             // below would sit on "END OF THE 9TH" until it expired. Keep
-            // checking instead. Extra innings cost a few extra polls, which is
-            // the right trade for showing the final promptly.
-            if input.gameEndAnnounced || info.inning >= input.scheduledInnings { return 5 }
+            // checking instead — when there is no socket to say the game is
+            // over. While patches are arriving the socket announces the end,
+            // and `GameCompletion` has already read the linescore and found
+            // the game still on, so checking every 5s only re-downloads the
+            // whole feed two dozen times through a break that leads to more
+            // baseball.
+            if info.inning >= input.scheduledInnings, !input.pushIsHealthy { return 5 }
             // Wait ~2 minutes from when the inning ended, then switch to 5s
             // so we catch the first pitch of the new half-inning quickly.
             if let start = input.betweenInningsStart {

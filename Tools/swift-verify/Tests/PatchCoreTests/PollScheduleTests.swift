@@ -91,13 +91,45 @@ final class PollScheduleTests: XCTestCase {
                                          sawBreakStart: true)), 5)
     }
 
-    /// Extra innings cost a handful of extra polls, which is the right trade
-    /// for showing the final promptly.
+    /// Without a socket, extra innings keep checking: more polls, which is
+    /// the right trade for showing the final promptly.
     func testExtraInningsKeepChecking() {
         XCTAssertEqual(
             PollSchedule.interval(inputs(breakState(inning: 12),
                                          betweenInningsStart: now,
                                          sawBreakStart: true)), 5)
+    }
+
+    /// With patches arriving, the socket announces the end and the linescore
+    /// has already said the game goes on, so a late break is an ordinary one:
+    /// checking every 5s re-downloaded the whole feed ~24 times per break.
+    func testALateBreakLeansOnAHealthySocket() {
+        for inning in [9, 12] {
+            XCTAssertEqual(
+                PollSchedule.interval(inputs(breakState(inning: inning),
+                                             pushIsHealthy: true,
+                                             betweenInningsStart: now,
+                                             sawBreakStart: true,
+                                             now: now)), 120)
+        }
+        XCTAssertEqual(
+            PollSchedule.interval(inputs(breakState(inning: 7),
+                                         pushIsHealthy: true,
+                                         scheduledInnings: 7,
+                                         betweenInningsStart: now.addingTimeInterval(-30),
+                                         sawBreakStart: true,
+                                         now: now)), 90)
+    }
+
+    /// The socket's own word that the game is over still wins, healthy or not.
+    func testAnAnnouncedEndOverridesAHealthySocketAtALateBreak() {
+        XCTAssertEqual(
+            PollSchedule.interval(inputs(breakState(inning: 9),
+                                         pushIsHealthy: true,
+                                         gameEndAnnounced: true,
+                                         betweenInningsStart: now,
+                                         sawBreakStart: true,
+                                         now: now)), 5)
     }
 
     /// A doubleheader's short game ends at the seventh, which is why the
@@ -187,8 +219,18 @@ final class PollScheduleTests: XCTestCase {
         XCTAssertEqual(
             PollSchedule.interval(inputs(.preGame(preGameInfo(firstPitch: now.addingTimeInterval(3600))),
                                          now: now)), 300)
+    }
+
+    /// Game 2 of a doubleheader has no start time. Five minutes between
+    /// checks left its card on "First pitch time TBD" well into the first
+    /// inning when the socket was not delivering; 30s is hundreds of requests
+    /// through game 1.
+    func testAnUnknownStartIsCheckedEveryMinute() {
         XCTAssertEqual(
-            PollSchedule.interval(inputs(.preGame(preGameInfo(firstPitch: nil)), now: now)), 300)
+            PollSchedule.interval(inputs(.preGame(preGameInfo(firstPitch: nil)), now: now)), 60)
+        XCTAssertEqual(
+            PollSchedule.interval(inputs(.preGame(preGameInfo(firstPitch: nil)),
+                                         pushIsHealthy: true, now: now)), 60)
     }
 
     func testLoadingRetriesSoon() {
