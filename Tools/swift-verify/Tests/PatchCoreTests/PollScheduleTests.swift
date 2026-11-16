@@ -237,6 +237,61 @@ final class PollScheduleTests: XCTestCase {
         XCTAssertEqual(PollSchedule.interval(inputs(.loading)), 12)
     }
 
+    // MARK: Cutting a sleep short
+
+    /// The loop is 10s into a 60s sleep sized for a healthy socket when the
+    /// card turns into something that wants checking every 5s.
+    func testAShorterIntervalCutsTheSleepShort() {
+        XCTAssertTrue(PollSchedule.shouldPollSooner(
+            wanted: 5, sleepEnds: now.addingTimeInterval(50), now: now))
+    }
+
+    /// The reported waste: during a break the loop sleeps until the two
+    /// minutes are up, and the interval the card "wants" is the same countdown
+    /// read later — shorter than the sleep was, but ending at the same moment.
+    /// Each socket update used to restart the loop and download the feed.
+    func testTheBreakCountdownDoesNotRestartTheLoop() {
+        let breakStart = now.addingTimeInterval(-40)
+        // The loop went to sleep 40s into the break, for the 80s that were left.
+        let sleepEnds = breakStart.addingTimeInterval(120)
+        for elapsed in stride(from: 41.0, through: 119.0, by: 13.0) {
+            let later = breakStart.addingTimeInterval(elapsed)
+            let wanted = PollSchedule.interval(inputs(breakState(inning: 4),
+                                                      pushIsHealthy: true,
+                                                      betweenInningsStart: breakStart,
+                                                      sawBreakStart: true,
+                                                      now: later))
+            XCTAssertFalse(
+                PollSchedule.shouldPollSooner(wanted: wanted, sleepEnds: sleepEnds, now: later),
+                "restarted \(elapsed)s into the break")
+        }
+    }
+
+    /// Waking a few seconds early is not worth a download.
+    func testASleepAboutToEndIsLeftAlone() {
+        XCTAssertFalse(PollSchedule.shouldPollSooner(
+            wanted: 5, sleepEnds: now.addingTimeInterval(3), now: now))
+        XCTAssertFalse(PollSchedule.shouldPollSooner(
+            wanted: 5, sleepEnds: now.addingTimeInterval(5.5), now: now))
+    }
+
+    func testALongerIntervalNeverCutsTheSleepShort() {
+        XCTAssertFalse(PollSchedule.shouldPollSooner(
+            wanted: 120, sleepEnds: now.addingTimeInterval(30), now: now))
+        // A finished game wants no more polls at all.
+        XCTAssertFalse(PollSchedule.shouldPollSooner(
+            wanted: .infinity, sleepEnds: now.addingTimeInterval(30), now: now))
+    }
+
+    /// The socket drops while the loop is asleep on the 60s net: with push no
+    /// longer healthy the live card wants 5s, and the loop must not wait out
+    /// the rest of the minute.
+    func testALostSocketCutsTheSleepShort() {
+        let wanted = PollSchedule.interval(inputs(liveState(), pushIsHealthy: false))
+        XCTAssertTrue(PollSchedule.shouldPollSooner(
+            wanted: wanted, sleepEnds: now.addingTimeInterval(45), now: now))
+    }
+
     private func preGameInfo(firstPitch: Date?) -> PreGameInfo {
         PreGameInfo(
             venueName: "Oracle Park", homeTeam: "SF", awayTeam: "LAD",

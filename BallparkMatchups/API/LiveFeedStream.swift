@@ -81,6 +81,10 @@ actor LiveFeedStream {
     enum Update: Sendable {
         case feed(LiveFeedResponse)
         case gameFinished
+        /// The socket dropped. It reconnects on its own and a fresh copy
+        /// follows when it does, but until then nothing is being pushed, so
+        /// the caller's polling has to cover the gap.
+        case disconnected
         /// The push path gave up. The caller must fall back to polling alone.
         case disabled(reason: String)
     }
@@ -176,6 +180,7 @@ actor LiveFeedStream {
                 stats.isConnected = false
                 stats.socketNote = reason
                 reconnecting = true
+                continuation.yield(.disconnected)
 
             case .unrecognisedFrame(let text):
                 stats.unrecognisedFrames += 1

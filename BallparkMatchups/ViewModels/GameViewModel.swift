@@ -145,6 +145,10 @@ final class GameViewModel: ObservableObject {
         // The cancelled loop's poll may not have unwound yet. Its flag would
         // make the new loop's first poll a no-op and then wait a full interval.
         pollInFlight = false
+        // The old loop's sleep is over. Until the new loop goes to sleep there
+        // is nothing to cut short, and a second update landing in that gap
+        // must not restart the loop again.
+        pollSleepEnds = nil
         pollingTask = Task { [weak self] in
             var skipPoll = firstPoll == .skip
             if firstPoll == .afterPushSeed {
@@ -164,7 +168,7 @@ final class GameViewModel: ObservableObject {
                     self.stopPush()
                     return
                 }
-                self.currentPollInterval = interval
+                self.pollSleepEnds = Date().addingTimeInterval(interval)
                 self.debugInfo.pollingInterval = interval
                 // Cleared only once the interval is set, so the seed's own
                 // processFeed doesn't restart the loop into a duplicate poll.
@@ -257,10 +261,24 @@ final class GameViewModel: ObservableObject {
                     self.beginPollLoop(firstPoll: justFed ? .skip : .now)
                     self.stopPush()
                     return
-                case .disabled:
-                    // Push gave up. Polling is still running and pushIsHealthy
-                    // is already false, so the card simply returns to 5s.
+                case .disconnected:
+                    // The socket reconnects on its own, but until it does
+                    // nothing is pushed, and the loop may be most of a minute
+                    // into a sleep sized for a healthy socket. The stats have
+                    // to be read first: they are what says push is down.
                     self.debugInfo.push = await stream.currentStats()
+                    self.pollSoonerIfNeeded()
+                case .disabled:
+                    // Push gave up, and pushIsHealthy is already false — but
+                    // the loop only finds that out when it wakes, which can
+                    // be most of a minute away with nothing left to update
+                    // the card. Restart it now, as for the end of a game.
+                    // The stream fetched a full feed after each failure
+                    // before the last; when that just came, don't fetch it
+                    // again.
+                    self.debugInfo.push = await stream.currentStats()
+                    let justFed = lastFeedAt.map { Date().timeIntervalSince($0) < 5 } ?? false
+                    self.beginPollLoop(firstPoll: justFed ? .skip : .now)
                     self.stopPush()
                     return
                 }
@@ -299,10 +317,10 @@ final class GameViewModel: ObservableObject {
     /// is waiting on it instead of fetching the same feed.
     private var pushSeedPending = false
     private var pushSeedArrived = false
-    /// The interval the poll loop is currently sleeping on. Read when a feed
-    /// arrives on the socket, to notice that the card now wants checking
-    /// sooner than the sleep already under way allows.
-    private var currentPollInterval: TimeInterval = 12
+    /// When the sleep the poll loop is in will end. Read when the socket
+    /// delivers a feed or drops, to notice that the card now wants checking
+    /// sooner than that.
+    private var pollSleepEnds: Date?
 
     private func poll(generation: Int) async {
         guard !pollInFlight else { return }
@@ -365,9 +383,17 @@ final class GameViewModel: ObservableObject {
         // before. That is most of a minute of a stale card, and it is how a
         // game ending in the 10th kept saying "coming to bat". A poll
         // recomputes on its own as it unwinds, so this is only for push.
-        guard !pollInFlight, !pushSeedPending else { return }
-        let wanted = nextInterval()
-        if wanted.isFinite, wanted < currentPollInterval { beginPollLoop() }
+        pollSoonerIfNeeded()
+    }
+
+    /// Restarts the poll loop when the card now wants checking sooner than
+    /// the sleep the loop is in will allow. See `PollSchedule.shouldPollSooner`
+    /// for why this compares against the end of that sleep.
+    private func pollSoonerIfNeeded() {
+        guard !pollInFlight, !pushSeedPending, let sleepEnds = pollSleepEnds else { return }
+        if PollSchedule.shouldPollSooner(wanted: nextInterval(), sleepEnds: sleepEnds) {
+            beginPollLoop()
+        }
     }
 
     private func processFeedInOrder(_ feed: LiveFeedResponse) async {

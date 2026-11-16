@@ -96,4 +96,23 @@ enum PollSchedule {
             return 12
         }
     }
+
+    /// Whether the loop should give up the sleep it is in and check now.
+    ///
+    /// Asked when the socket changes the card, or drops, in the middle of a
+    /// sleep. The comparison is against when that sleep *ends*, not how long
+    /// it was. A half-inning break's interval is a countdown, so it is always
+    /// shorter than it was when the loop went to sleep; comparing lengths
+    /// restarted the loop — a download of the whole feed — on every update
+    /// the socket delivered during a break.
+    static func shouldPollSooner(
+        wanted: TimeInterval,
+        sleepEnds: Date,
+        now: Date = Date()
+    ) -> Bool {
+        guard wanted.isFinite else { return false }
+        // A second of slack: the two sides come from clocks read a moment
+        // apart, and waking a second early is not worth a download.
+        return now.addingTimeInterval(wanted) < sleepEnds.addingTimeInterval(-1)
+    }
 }
