@@ -67,6 +67,12 @@ struct DebugOverlayView: View {
                 row("Patched", "\(push.updatesApplied)")
                 row("Full refresh", "\(push.fullRefreshes)")
                 row("Patch fails", "\(push.patchFailures)")
+                if push.unansweredRequests > 0 {
+                    // Requests the network never answered. Not failures of
+                    // the patch path, so they don't count toward the kill
+                    // switch and cost no refetch.
+                    row("No answer", "\(push.unansweredRequests)")
+                }
                 row("Odd frames", "\(push.unrecognisedFrames)")
                 // Why the refetches happened: server-requested / no timecode /
                 // whole-object response, plus total ops applied.

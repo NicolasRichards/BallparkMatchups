@@ -11,6 +11,10 @@ struct PushFeedStats: Sendable, Equatable {
     var updatesApplied = 0
     var fullRefreshes = 0
     var patchFailures = 0
+    /// diffPatch requests that got no answer at all — no connection, a
+    /// timeout. Kept apart from `patchFailures`: these say the network is
+    /// struggling, not that patching is broken, and they cost no refetch.
+    var unansweredRequests = 0
     var duplicateOrEmpty = 0
     /// Frames the socket delivered that did not decode as a push event.
     var unrecognisedFrames = 0
@@ -74,9 +78,11 @@ struct PushFeedStats: Sendable, Equatable {
 /// never decode. `LiveFeedResponse` is re-derived after each change, so the rest
 /// of the app is unaware this is not a poll.
 ///
-/// Every failure path ends in a full refetch. A partially applied patch means the
-/// local copy no longer matches the server's, and stale-but-wrong is worse than
-/// a wasted request.
+/// Every failure that could leave the copy wrong ends in a full refetch. A
+/// partially applied patch means the local copy no longer matches the server's,
+/// and stale-but-wrong is worse than a wasted request. A request that got no
+/// answer at all is different: the copy is still right, only behind, and the
+/// next update's diff starts from it.
 actor LiveFeedStream {
     enum Update: Sendable {
         case feed(LiveFeedResponse)
@@ -232,10 +238,13 @@ actor LiveFeedStream {
             )
             let changed = try applyResponse(response.value)
             stats.bytesOverPush += response.byteCount
-            guard changed else {
-                stats.consecutivePatchFailures = 0
-                return
-            }
+            // An empty answer is not a patch succeeding, so it leaves the kill
+            // switch's count alone. Resetting it here let a path that failed
+            // on every real patch run all game, provided an empty answer came
+            // between failures — and the refetch after a failure produces
+            // exactly that, by putting the copy ahead of the updates still
+            // queued behind it.
+            guard changed else { return }
 
             guard let decoded = try? tree?.decoded(as: LiveFeedResponse.self) else {
                 // The tree no longer decodes — treat that exactly like a failed
@@ -249,14 +258,38 @@ actor LiveFeedStream {
             stats.consecutivePatchFailures = 0
             continuation.yield(.feed(decoded))
         } catch {
+            if Self.gotNoAnswer(error) {
+                // Ordinary network trouble, which polling would be suffering
+                // too. It says nothing about whether patching works, so it
+                // does not count toward the kill switch: three of these in a
+                // row used to shut push off for the rest of the game over a
+                // few seconds without signal. Nor is there anything to
+                // refetch — nothing was applied, so the copy we hold is still
+                // right, and the next update's diff starts from it and covers
+                // this one as well.
+                stats.unansweredRequests += 1
+                stats.lastError = error.localizedDescription
+                return
+            }
             await recordFailure(error.localizedDescription, yielding: continuation)
         }
+    }
+
+    /// Whether a failed request simply never got an answer: no connection, a
+    /// timeout, a cancelled task. Anything the server did answer — an HTTP
+    /// error, a body that would not parse or apply — is the patch path failing.
+    private static func gotNoAnswer(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        guard let apiError = error as? APIError,
+              case .networkError(let underlying) = apiError else { return false }
+        return underlying is URLError || underlying is CancellationError
     }
 
     /// Records a failed update and trips the kill switch once they stack up.
     ///
     /// A seed failure is not counted — that is ordinary network trouble, and
-    /// polling would be failing too.
+    /// polling would be failing too. Neither is a diffPatch request that got
+    /// no answer, which never reaches here.
     private func recordFailure(
         _ reason: String,
         yielding continuation: AsyncStream<Update>.Continuation
