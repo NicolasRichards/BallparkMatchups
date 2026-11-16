@@ -47,6 +47,9 @@ final class GameViewModel: ObservableObject {
     private var playerCache: [Int: PlayerInfo] = [:]
     private var careerSplitCache: [CareerSplitKey: [SplitLine]] = [:]
     private var shownSplitData: SplitData?
+    /// The at-bat on screen was built while a stats request was failing, so
+    /// its card is missing splits or the head-to-head line. See `StatsRetry`.
+    private var statsRetry: StatsRetry?
     private var careerBvPCache: [BvPKey: BvPLine?] = [:]
     /// Batter's overall OPS, the baselines the split filter compares against.
     /// nil means the request worked but he has no such line yet.
@@ -598,7 +601,14 @@ final class GameViewModel: ObservableObject {
         // there is nothing to patch, and the old card would stay up until the
         // at-bat ended. Rebuild instead.
         if case .live = uiState {} else { refreshKind = .full }
-        debugInfo.lastRefreshKind = "\(refreshKind)"
+        // The card on screen is missing stats whose request failed. Rebuild
+        // it once another try is due.
+        var retryingStats = false
+        if refreshKind != .full, statsRetry?.isDue(for: newTick) == true {
+            refreshKind = .full
+            retryingStats = true
+        }
+        debugInfo.lastRefreshKind = retryingStats ? "full (stats retry)" : "\(refreshKind)"
 
         if refreshKind == .none && lastTickState != nil { return }
 
@@ -647,8 +657,8 @@ final class GameViewModel: ObservableObject {
             }
 
         case .situational:
-            // Same rule as a full refresh: don't record an update whose data
-            // failed to load, so the next poll tries again.
+            // Not recorded when it was cancelled part-way, so the next update
+            // does it again.
             guard await refreshSituational(tick: newTick, feed: feed, isFirstBatter: isFirstBatter) else { return }
 
         case .full:
@@ -656,6 +666,8 @@ final class GameViewModel: ObservableObject {
             // was backgrounded mid-refresh), leave lastTickState alone so the
             // next update retries. Recording it would turn the rest of this
             // at-bat into count-only updates of the previous batter's card.
+            // A card built without some of its stats *is* recorded; those are
+            // retried on their own schedule (see StatsRetry).
             guard await refreshFull(tick: newTick, feed: feed, isFirstBatter: isFirstBatter) else { return }
 
         case .none:
@@ -667,7 +679,8 @@ final class GameViewModel: ObservableObject {
 
     // MARK: - Situational Refresh
 
-    /// Returns false when the splits could not be loaded.
+    /// Returns false when there is no live card to update, or the refresh
+    /// was cancelled part-way.
     private func refreshSituational(tick: TickState, feed: LiveFeedResponse, isFirstBatter: Bool) async -> Bool {
         guard case .live(let existing) = uiState else { return false }
 
@@ -690,18 +703,40 @@ final class GameViewModel: ObservableObject {
         )
         async let baselinesResult = batterBaselines(tick.batterId)
 
-        guard let seasonBatterSplits = await seasonBatterResult,
-              let seasonPitcherSplits = await seasonPitcherResult,
-              let baselines = await baselinesResult
-        else { return false }
-
-        let data = SplitData(
-            batterId: tick.batterId,
-            pitcherId: tick.pitcherId,
-            batterSplits: cachedCareerSplits(for: tick.batterId, group: "hitting") + seasonBatterSplits,
-            pitcherSplits: cachedCareerSplits(for: tick.pitcherId, group: "pitching") + seasonPitcherSplits,
-            baselines: baselines
+        let (seasonBatter, seasonPitcher, baselines) = await (
+            seasonBatterResult, seasonPitcherResult, baselinesResult
         )
+
+        // Cancelled (the phone locked mid-refresh, say): leave the card and
+        // the recorded state alone, so the next update does this again.
+        guard !Task.isCancelled else { return false }
+
+        let data: SplitData
+        if let seasonBatter, let seasonPitcher, let baselines {
+            data = SplitData(
+                batterId: tick.batterId,
+                pitcherId: tick.pitcherId,
+                batterSplits: cachedCareerSplits(for: tick.batterId, group: "hitting") + seasonBatter,
+                pitcherSplits: cachedCareerSplits(for: tick.pitcherId, group: "pitching") + seasonPitcher,
+                baselines: baselines
+            )
+        } else if let shown = shownSplitData,
+                  shown.batterId == tick.batterId, shown.pitcherId == tick.pitcherId {
+            // A request failed. The lines the card was built from are for this
+            // same matchup, and a season line does not move in the middle of
+            // an at-bat, so re-rank those. Holding the update back instead
+            // froze the outs and runners on screen for as long as the request
+            // kept failing.
+            data = shown
+        } else {
+            data = SplitData(
+                batterId: tick.batterId,
+                pitcherId: tick.pitcherId,
+                batterSplits: cachedCareerSplits(for: tick.batterId, group: "hitting") + (seasonBatter ?? []),
+                pitcherSplits: cachedCareerSplits(for: tick.pitcherId, group: "pitching") + (seasonPitcher ?? []),
+                baselines: baselines ?? (season: nil, career: nil)
+            )
+        }
         let (newBatterSplits, newPitcherSplit) = selectSplits(data, tick: tick, feed: feed, isFirstBatter: isFirstBatter)
 
         uiState = .live(MatchupCard(
@@ -720,7 +755,8 @@ final class GameViewModel: ObservableObject {
 
     // MARK: - Full Refresh
 
-    /// Returns false when the card could not be built.
+    /// Returns false when the card could not be built at all: a player is
+    /// missing, or the refresh was cancelled part-way.
     private func refreshFull(tick: TickState, feed: LiveFeedResponse, isFirstBatter: Bool) async -> Bool {
         // Everything below runs in parallel: roughly eight requests to
         // statsapi per new at-bat, most of them cached after the first.
@@ -766,21 +802,30 @@ final class GameViewModel: ObservableObject {
             seasonBatterSplitsResult, seasonPitcherSplitsResult
         )
 
-        // Any failed or cancelled request (the phone locked mid-refresh, say)
-        // fails the whole card, or a bare one would stick for the at-bat.
+        // Cancelled (the phone locked mid-refresh, say): every request came
+        // back empty, and a card built from that would be recorded as this
+        // at-bat's. Nor can a card be built without both players.
         guard !Task.isCancelled,
-              let bInfo = batterInfo, let pInfo = pitcherInfo,
-              let bvp = bvpLoaded, let baselines = baselinesLoaded,
-              let careerBatter, let careerPitcher, let seasonBatter, let seasonPitcher
+              let bInfo = batterInfo, let pInfo = pitcherInfo
         else { return false }
+
+        // The stats are extras, and a failed request for one must not hold
+        // the card back: the previous batter's would stay up in its place for
+        // as long as the request kept failing. Build with what loaded, and
+        // come back for the rest a few times (see StatsRetry) rather than
+        // leave the card bare for the at-bat.
+        let statsComplete = bvpLoaded != nil && baselinesLoaded != nil
+            && careerBatter != nil && careerPitcher != nil
+            && seasonBatter != nil && seasonPitcher != nil
+        noteStatsLoad(complete: statsComplete, tick: tick)
 
         let sit = situation(for: tick)
         let data = SplitData(
             batterId: tick.batterId,
             pitcherId: tick.pitcherId,
-            batterSplits: careerBatter + seasonBatter,
-            pitcherSplits: careerPitcher + seasonPitcher,
-            baselines: baselines
+            batterSplits: (careerBatter ?? []) + (seasonBatter ?? []),
+            pitcherSplits: (careerPitcher ?? []) + (seasonPitcher ?? []),
+            baselines: baselinesLoaded ?? (season: nil, career: nil)
         )
         let (newBatterSplits, newPitcherSplit) = selectSplits(data, tick: tick, feed: feed, isFirstBatter: isFirstBatter)
 
@@ -791,7 +836,9 @@ final class GameViewModel: ObservableObject {
             batter: bInfo,
             pitcher: pInfo,
             situation: sit,
-            bvp: bvp,
+            // The outer nil is a failed request, the inner one no history.
+            // Either way there is no head-to-head line to show.
+            bvp: bvpLoaded ?? nil,
             batterSplits: newBatterSplits,
             pitcherSplit: newPitcherSplit,
             batterGame: batterGame,
@@ -799,6 +846,21 @@ final class GameViewModel: ObservableObject {
             lastEvent: extractLastEvent(feed: feed)
         ))
         return true
+    }
+
+    /// Notes whether the card just built has all of its stats, so the missing
+    /// ones can be tried again.
+    private func noteStatsLoad(complete: Bool, tick: TickState) {
+        guard !complete else {
+            statsRetry = nil
+            return
+        }
+        if var retry = statsRetry, retry.covers(tick) {
+            retry.noteRetry()
+            statsRetry = retry
+        } else {
+            statsRetry = StatsRetry(tick: tick)
+        }
     }
 
     // MARK: - Final
