@@ -259,11 +259,16 @@ struct GameRow: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 4) {
+                    // Emphasis and the start time follow the same flags the
+                    // section headers do. Matching the status text exactly
+                    // left a delayed or under-review game dimmed under LIVE
+                    // NOW, and a "Game Over" or postponed one showing a start
+                    // time under FINAL.
                     Text(game.statusDisplay)
-                        .statFont(size: 14, bold: game.detailedState == "In Progress")
-                        .foregroundColor(game.detailedState == "In Progress" ? Theme.primaryText : Theme.secondaryText)
+                        .statFont(size: 14, bold: game.isUnderway)
+                        .foregroundColor(game.isUnderway ? Theme.primaryText : Theme.secondaryText)
 
-                    if game.detailedState != "In Progress" && game.detailedState != "Final" {
+                    if !game.isUnderway && !game.isOver {
                         // A TBD game's listed time is a placeholder, not a start
                         Text(game.startTimeTBD ? "TBD" : formatTime(game.gameDate))
                             .labelFont(size: 12)

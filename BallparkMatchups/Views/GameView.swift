@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 
 struct GameView: View {
     @ObservedObject var vm: GameViewModel
@@ -126,31 +125,6 @@ struct GameView: View {
                 detail: "Game was cancelled\(reason.isEmpty ? "." : " due to \(reason.lowercased()).")"
             )
             .padding(.top, 16)
-        }
-    }
-}
-
-// MARK: - Last Updated Text
-
-struct LastUpdatedText: View {
-    let date: Date
-    let status: ConnectionStatus
-    @State private var now = Date()
-    private let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
-
-    var body: some View {
-        let seconds = Int(now.timeIntervalSince(date))
-        Text(seconds < 5 ? "Live" : "Updated \(seconds)s ago")
-            .font(.system(size: 12, weight: .medium, design: .monospaced))
-            .foregroundColor(statusColor(seconds: seconds))
-            .onReceive(timer) { now = $0 }
-    }
-
-    private func statusColor(seconds: Int) -> Color {
-        switch status {
-        case .ok: return seconds > 30 ? .yellow : Theme.secondaryText
-        case .retrying: return .yellow
-        case .degraded: return .red
         }
     }
 }
