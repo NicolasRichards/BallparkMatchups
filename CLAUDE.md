@@ -9,7 +9,7 @@ The owner runs Claude Code locally on a Mac, in the project folder, and opens th
 - Cloud sessions are a different setup: they work on a fresh clone and push a `claude/...` branch to GitHub, which does not change the local folder until it is merged and pulled. If you are in a cloud session, there is no Xcode or simulator, so say plainly that the change is unbuilt and list what to check after building in Xcode.
 - The project file `BallparkMatchups.xcodeproj` is committed; there is no `project.yml` in the repo. Avoid editing `project.pbxproj` by hand unless a change requires it (for example adding or removing a file), and say so when you do.
 - A shared Xcode scheme named `BallparkMatchups` exists, and command-line builds work on the owner's Mac: `xcodebuild -project BallparkMatchups.xcodeproj -scheme BallparkMatchups -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build` (Debug and Release both verified). Do not report a build as passing unless one actually ran.
-- Optional check: `cd Tools/swift-verify && swift test` (the push-feed patch core; it symlinks `BallparkMatchups/API/JSONValue.swift`). Also `Tools/diffpatch-verify` (see its README).
+- Checks that need no live game: `cd Tools/swift-verify && swift test` (the patch core, poll schedule, end-of-game and retry rules; its sources are symlinks into `BallparkMatchups/`, so a new file it should cover needs a symlink there), and `Tools/game-sim/run.sh` (the real `GameViewModel` and `LiveFeedStream` run against scripted games with failing requests, about 90 seconds; run it after changing either, and see its README). Also `Tools/diffpatch-verify` (see its README).
 
 ## Layout
 
@@ -17,7 +17,7 @@ The owner runs Claude Code locally on a Mac, in the project folder, and opens th
 - `BallparkMatchups/ViewModels`: `AppViewModel` (top-level state) and `GameViewModel` (per-game polling, diffing, split selection)
 - `BallparkMatchups/Services`: feature flags, location, venue cache, `SplitPriorityEngine`
 - `BallparkMatchups/Models`, `Views`, `Resources` (`venues.json`, `situationCodes.json`)
-- `Tools/`: verification harnesses and working notes (`PUSH-FEED-STATUS.md`, `AFL-SUPPORT-NOTES.md`)
+- `Tools/`: verification harnesses (`swift-verify`, `game-sim`, `diffpatch-verify`) and working notes (`PUSH-FEED-STATUS.md`, `AFL-SUPPORT-NOTES.md`)
 - `docs/`, `AppStoreScreenshots/`: marketing site and App Store assets
 
 ## Conventions
@@ -26,7 +26,3 @@ The owner runs Claude Code locally on a Mac, in the project folder, and opens th
 - Split display thresholds live in `Models/SplitThresholds.swift`; the README "Data Notes" section describes the intended values.
 - Version bumps are their own commits, titled like `Bump to 1.6 (8)`.
 - Commit messages are short imperative sentences describing what changed.
-
-## Known doc drift
-
-The README and `Tools/PUSH-FEED-STATUS.md` say the push feed is off by default. The code (`Services/FeatureFlags.swift`) defaults it to on, matching commit "Turn the push feed on by default, in every build". Trust the code, and fix the docs when touching them.

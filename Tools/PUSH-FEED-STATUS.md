@@ -5,12 +5,13 @@ Working notes for the Gameday push feed. The PR description
 design; this is operational state and, below, how to read the results without
 needing to ask anyone.
 
-Branch `claude/ballparkmatchups-baseball-stats-8bkxmp`, head `14dcb6c`.
-Last updated 2026-09-19.
+On `main` since 2026-10-24. Last updated 2026-11-16. The sections below are a
+log, roughly oldest first: where they disagree, the later one is current.
 
 ## Status
 
-Works end to end on live games. Off by default. The full chain runs: socket →
+Works end to end on live games. On by default since 2026-10-08 (it was off when
+the first measurements below were taken). The full chain runs: socket →
 frame decode → `diffPatch` → RFC 6902 apply → re-decode → `diffTickState` → UI.
 
 Two full games measured, plus shorter sessions:
@@ -53,16 +54,18 @@ past 700 KB and the ratio should improve further.
 ## Picking it back up
 
 ```sh
-git checkout claude/ballparkmatchups-baseball-stats-8bkxmp
-cd Tools/swift-verify && swift test     # 16 tests, seconds, no Xcode needed
+cd Tools/swift-verify && swift test     # 75 tests, seconds, no Xcode needed
+Tools/game-sim/run.sh                   # the real view model and stream against scripted games, ~90s
 ```
 
-Run that before an Xcode build — it typechecks `JSONValue.swift` and
-`GamedaySocket.swift` under Swift 6 and fails fast.
+Run the first before an Xcode build — it typechecks the patch core, the poll
+schedule and the retry rules under Swift 6 and fails fast. Run the second after
+changing `GameViewModel` or `LiveFeedStream`.
 
-To exercise it: long-press the game screen → tap the bordered **PUSH FEED**
-box → back out to the game list → re-enter. The flag is read once in
-`startPolling()`, so a running session will not pick it up.
+The push feed is on by default. To compare against polling alone, in a Debug
+build: long-press the game screen → tap the bordered **PUSH FEED** box → back
+out to the game list → re-enter. The flag is read once in `startPolling()`, so
+a running session will not pick it up.
 
 ## Reading the overlay — what to do about what you see
 
@@ -83,8 +86,12 @@ Other counters: `Patch fails` and `Odd frames` should both stay **0**; if
 either climbs, `Last error` or the orange raw-frame text says why. `Socket`
 should read `connected`; when down, a yellow line gives the close code.
 `Poll interval` should sit at 60s while patches flow and 5s otherwise.
+`No answer` (shown only when non-zero) counts diffPatch requests the network
+never answered; they cost no refetch and do not count toward the kill switch.
 
 ## Decision
+
+*Superseded: merged to `main`, and on by default since 2026-10-08.*
 
 Do not merge on a clean build. Merge on a full game's counters, and keep it
 off by default until it has run at a park on stadium cell service — the
@@ -106,7 +113,24 @@ Rationale: a persistently failing push path is *worse* than none, because
 every failure costs a full refetch while the backstop poll still runs. An
 early reading showed exactly that — 586 KB spent against 584 KB of polling.
 
+Changed 2026-11-16:
+
+- Only an applied patch resets the count. An empty diffPatch answer used to,
+  which let a path that failed on every real patch run all game, since the
+  refetch after each failure puts the copy ahead of the updates still queued
+  and their answers come back empty.
+- A diffPatch request that gets no answer at all (no connection, a timeout) is
+  not a patch failure. It is not counted and not refetched: nothing was
+  applied, so the copy is still right, and the next update's diff starts from
+  it. Three of these in a row used to shut push off for the game over a few
+  seconds without signal.
+- When the switch trips, the poll loop is restarted at once instead of being
+  left to finish a 60s sleep.
+
 ## Known cost: foregrounding fetches twice
+
+*Fixed 2026-10-31: the poll loop now waits for the socket's seed feed instead
+of fetching its own (`FirstPoll.afterPushSeed`).*
 
 `handleForeground()` calls `startPolling()`, which immediately polls (one full
 feed) **and** starts a new `LiveFeedStream` that seeds (another full feed).
@@ -412,3 +436,37 @@ parent org, so `parentOrgId` on the team will not do it. Candidates worth
 checking against the live API: the player's `yearByYear` or season splits
 across sports, picking the level with the most plate appearances this season.
 Not attempted here: this environment has no route to statsapi.mlb.com.
+
+## Review fixes, 2026-11-16 — not yet seen on a live game
+
+A whole-app review turned up six faults in the push path and its polling
+backstop. The season was over, so none of the fixes has run against a real
+game. They are covered by `swift test` and by `Tools/game-sim`, which fails on
+the old code and passes on the new.
+
+- **Push stopped, polling slept.** `.disabled` and a dropped socket left the
+  poll loop finishing a 60s sleep with nothing updating the card. The stream
+  now yields `.disconnected`, and both cases restart the loop.
+- **The break countdown restarted the loop.** The restart check compared
+  interval lengths. A break's interval is a countdown, so every update during a
+  watched break restarted the loop and downloaded the whole feed. It now
+  compares against when the sleep ends (`PollSchedule.shouldPollSooner`).
+- **Late breaks polled every 5s.** From the last scheduled inning on, every
+  break was polled every 5s even with patches arriving, about 24 full feeds per
+  break. That net now applies only when the socket is not healthy; the socket
+  announces the end, and `GameCompletion` has already found the game still on.
+- **The kill switch** was reset by empty answers and tripped by unanswered
+  requests. See the Kill switch section.
+- **A TBD start** is polled every 60s rather than every 5 minutes.
+
+What to look for in the overlay at the next live game:
+
+- `Poll interval` reads 60s during at-bats while `Patched` climbs, and does not
+  drop to 5s at the middle or end of the 9th unless `Socket` is down.
+- `Request count` does not go up by one for each `Patched` during a break.
+- `No answer` climbing on bad signal is expected. `Patch fails` should not
+  climb with it, and `PUSH DISABLED` should not appear because of it.
+- After `PUSH DISABLED` or `Socket: down`, `Poll interval` reads 5s within a
+  few seconds.
+- `Last refresh` reading `full (stats retry)` means a stats request failed and
+  is being retried. It should appear at most three times in one at-bat.
